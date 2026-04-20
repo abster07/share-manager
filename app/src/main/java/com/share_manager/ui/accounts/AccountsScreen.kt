@@ -278,20 +278,20 @@ private fun AccountDialog(
 
                 // BOID
                 OutlinedTextField(
-                    value = boid,
-                    onValueChange = { if (it.length <= 16) boid = it.filter { c -> c.isDigit() } },
-                    label = { Text("BOID (16 digits) *") },
-                    singleLine = true,
-                    isError = boidError,
-                    supportingText = {
-                        if (boidError) Text("BOID must be exactly 16 digits", color = Red400)
-                        else Text("${boid.length}/16", color = Color(0xFF64748B))
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = dialogFieldColors(),
-                    fontFamily = FontFamily.Monospace
-                )
+    value = boid,
+    onValueChange = { v -> if (v.length <= 16) boid = v.filter { c -> c.isDigit() } },
+    label = { Text("BOID (16 digits) *") },
+    singleLine = true,
+    isError = boidError,
+    supportingText = {
+        if (boidError) Text("BOID must be exactly 16 digits", color = Red400)
+        else Text("${boid.length}/16", color = Color(0xFF64748B))
+    },
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+    modifier = Modifier.fillMaxWidth(),
+    colors = dialogFieldColors()
+)
 
                 // CRN (optional)
                 OutlinedTextField(
@@ -383,7 +383,9 @@ private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = OnSurface,
     unfocusedTextColor = OnSurface,
     cursorColor = Gold400,
-    containerColor = Color.Transparent
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    disabledContainerColor = Color.Transparent
 )
 
 // Extension to allow copy on base Account with id=0 default

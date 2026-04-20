@@ -51,7 +51,7 @@ data class ResultCheckResponse(
 
 data class AccountResult(
     val account: Account,
-    val status: ResultStatus = ResultStatus.PENDING
+    val status: ResultStatus = ResultStatus.Pending
 )
 
 sealed class ResultStatus {

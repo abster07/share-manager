@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:name=".MeroShareApp"
+        android:name=".MeroShareApplication"
         android:allowBackup="true"
         android:label="MeroShare Bulk"
         android:roundIcon="@mipmap/ic_launcher_round"
