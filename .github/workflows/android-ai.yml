@@ -159,7 +159,7 @@ jobs:
           run_number = os.environ["GITHUB_RUN_NUMBER"]
           today      = datetime.date.today().isoformat()
           
-          download_url = f"https://github.com/{repo}/releases/download/{tag_name}/{apk_name}"
+          download_url = f"https://github.com/{repo}/releases/download/{download_url}/{apk_name}"
 
           entry = {
               "id":          app_id,
