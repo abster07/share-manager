@@ -31,3 +31,34 @@
     <init>(...);
     <fields>;
 }
+
+# ── Hilt ViewModels (CRITICAL — prevents ClassCastException) ──────────────────
+-keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
+-keepclassmembers @dagger.hilt.android.lifecycle.HiltViewModel class * {
+    <init>(...);
+}
+
+# Keep all ViewModels
+-keep class * extends androidx.lifecycle.ViewModel { *; }
+-keepclassmembers class * extends androidx.lifecycle.ViewModel {
+    <init>(...);
+}
+
+# Hilt internal generated components (must not be renamed)
+-keep class **_HiltComponents { *; }
+-keep class **_ComponentTreeDeps { *; }
+-keep class *_GeneratedInjector { *; }
+-keep class **Hilt_* { *; }
+
+# Hilt — keep all generated and injected members
+-keepclasseswithmembers class * {
+    @dagger.hilt.* <fields>;
+    @dagger.hilt.* <methods>;
+}
+
+# javax.inject
+-keep class javax.inject.** { *; }
+-keepclassmembers class * {
+    @javax.inject.Inject <init>(...);
+    @javax.inject.Inject <fields>;
+}
