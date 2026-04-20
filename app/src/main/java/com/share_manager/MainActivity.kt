@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MeroShareTheme {
-                MeroShareApp()
+                MeroShareNavHost()
             }
         }
     }
@@ -43,7 +43,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 }
 
 @Composable
-fun MeroShareApp() {
+fun MeroShareNavHost() {
     val navController = rememberNavController()
     val tabs = listOf(Screen.Results, Screen.Accounts)
 

@@ -9,7 +9,7 @@ permissions:
 
 env:
   APPVAULT_REPO: "abster07/app-vault"
-  APP_ID: "Share Manage"
+  APP_ID: "share-manage"
   APK_NAME: "share-manage.apk"
 
 jobs:

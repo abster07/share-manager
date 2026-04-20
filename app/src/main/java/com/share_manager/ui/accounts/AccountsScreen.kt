@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -278,20 +279,20 @@ private fun AccountDialog(
 
                 // BOID
                 OutlinedTextField(
-    value = boid,
-    onValueChange = { v -> if (v.length <= 16) boid = v.filter { c -> c.isDigit() } },
-    label = { Text("BOID (16 digits) *") },
-    singleLine = true,
-    isError = boidError,
-    supportingText = {
-        if (boidError) Text("BOID must be exactly 16 digits", color = Red400)
-        else Text("${boid.length}/16", color = Color(0xFF64748B))
-    },
-    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-    modifier = Modifier.fillMaxWidth(),
-    colors = dialogFieldColors()
-)
+                    value = boid,
+                    onValueChange = { v -> if (v.length <= 16) boid = v.filter { c -> c.isDigit() } },
+                    label = { Text("BOID (16 digits) *") },
+                    singleLine = true,
+                    isError = boidError,
+                    supportingText = {
+                        if (boidError) Text("BOID must be exactly 16 digits", color = Red400)
+                        else Text("${boid.length}/16", color = Color(0xFF64748B))
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = dialogFieldColors()
+                )
 
                 // CRN (optional)
                 OutlinedTextField(

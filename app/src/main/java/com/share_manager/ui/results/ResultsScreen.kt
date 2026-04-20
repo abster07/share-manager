@@ -308,15 +308,15 @@ private fun CompanyPickerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Gold400,
-    unfocusedBorderColor = Outline,
-    focusedTextColor = OnSurface,
-    unfocusedTextColor = OnSurface,
-    cursorColor = Gold400,
-    focusedContainerColor = Color.Transparent,
-    unfocusedContainerColor = Color.Transparent,
-    disabledContainerColor = Color.Transparent
-)
+                    focusedBorderColor = Gold400,
+                    unfocusedBorderColor = Outline,
+                    focusedTextColor = OnSurface,
+                    unfocusedTextColor = OnSurface,
+                    cursorColor = Gold400,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent
+                )
             )
 
             Spacer(Modifier.height(8.dp))

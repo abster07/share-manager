@@ -2,6 +2,7 @@ package com.share_manager.di
 
 import android.content.Context
 import androidx.room.Room
+import com.google.gson.GsonBuilder
 import com.share_manager.data.db.AccountDao
 import com.share_manager.data.db.MeroShareDatabase
 import com.share_manager.network.IpoApiService
@@ -41,11 +42,14 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("https://iporesult.cdsc.com.np/")
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
+    fun provideRetrofit(client: OkHttpClient): Retrofit {
+        val lenientGson = GsonBuilder().setLenient().create()
+        return Retrofit.Builder()
+            .baseUrl("https://iporesult.cdsc.com.np/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create(lenientGson))
+            .build()
+    }
 
     @Provides
     @Singleton
