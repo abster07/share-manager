@@ -1,0 +1,8 @@
+{
+  "name": "Share Manage",
+  "description": "Manage your multiple accoints in the meroshare app wity some easy addition and chevk ipo results in single clixk remove ebery hassle of logging in and everything. Every data of yours is encrypted in our app and this app works locally and contacts directly to cdsc server to ensure safety.",
+  "iconBg": "linear-gradient(135deg,#1a0533,#6d28d9)",
+  "tags": ["share", "market", "ipo", "accounts", "management", "daily"],
+  "platforms": ["android"],
+  "version": "1.0.0"
+}

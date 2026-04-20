@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Background circle -->
+    <path
+        android:fillColor="#0A0E1A"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+
+    <!-- Gold "M" lettermark -->
+    <path
+        android:fillColor="#E8B84B"
+        android:pathData="M24,78 L24,30 L38,30 L54,58 L70,30 L84,30 L84,78 L72,78 L72,52 L57,78 L51,78 L36,52 L36,78 Z" />
+
+    <!-- Gold underline accent -->
+    <path
+        android:fillColor="#E8B84B"
+        android:pathData="M24,84 L84,84 L84,87 L24,87 Z" />
+
+</vector>
