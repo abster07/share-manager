@@ -1,9 +1,9 @@
-package com.meroshare.data.repository
+package com.share_manager.data.repository
 
-import com.meroshare.data.db.AccountDao
-import com.meroshare.data.model.*
-import com.meroshare.network.IpoApiService
-import com.meroshare.util.EncryptionUtil
+import com.share_manager.data.db.AccountDao
+import com.share_manager.data.model.*
+import com.share_manager.network.IpoApiService
+import com.share_manager.util.EncryptionUtil
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject

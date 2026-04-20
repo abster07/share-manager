@@ -1,7 +1,7 @@
-package com.meroshare.data.db
+package com.share_manager.data.db
 
 import androidx.room.*
-import com.meroshare.data.model.Account
+import com.share_manager.data.model.Account
 import kotlinx.coroutines.flow.Flow
 
 @Dao

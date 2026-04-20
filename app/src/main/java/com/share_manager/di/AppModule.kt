@@ -1,10 +1,10 @@
-package com.meroshare.di
+package com.share_manager.di
 
 import android.content.Context
 import androidx.room.Room
-import com.meroshare.data.db.AccountDao
-import com.meroshare.data.db.MeroShareDatabase
-import com.meroshare.network.IpoApiService
+import com.share_manager.data.db.AccountDao
+import com.share_manager.data.db.MeroShareDatabase
+import com.share_manager.network.IpoApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

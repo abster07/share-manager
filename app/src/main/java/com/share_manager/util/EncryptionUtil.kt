@@ -1,4 +1,4 @@
-package com.meroshare.util
+package com.share_manager.util
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec

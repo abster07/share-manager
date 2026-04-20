@@ -7,17 +7,25 @@ plugins {
 }
 
 android {
-    namespace = "com.meroshare"
+    namespace = "com.share_manager"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.meroshare"
+        applicationId = "com.share_manager"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
     }
-
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+    
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -25,6 +33,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

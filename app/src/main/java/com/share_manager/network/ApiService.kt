@@ -1,8 +1,8 @@
-package com.meroshare.network
+package com.share_manager.network
 
-import com.meroshare.data.model.CompanyShareListResponse
-import com.meroshare.data.model.ResultCheckRequest
-import com.meroshare.data.model.ResultCheckResponse
+import com.share_manager.data.model.CompanyShareListResponse
+import com.share_manager.data.model.ResultCheckRequest
+import com.share_manager.data.model.ResultCheckResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET

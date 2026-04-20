@@ -1,4 +1,4 @@
-package com.meroshare.ui.accounts
+package com.share_manager.ui.accounts
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -21,10 +21,10 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.meroshare.data.model.Account
-import com.meroshare.ui.components.GoldButton
-import com.meroshare.ui.components.SectionHeader
-import com.meroshare.ui.theme.*
+import com.share_manager.data.model.Account
+import com.share_manager.ui.components.GoldButton
+import com.share_manager.ui.components.SectionHeader
+import com.share_manager.ui.theme.*
 
 @Composable
 fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {

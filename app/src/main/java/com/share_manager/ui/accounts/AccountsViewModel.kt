@@ -1,9 +1,9 @@
-package com.meroshare.ui.accounts
+package com.share_manager.ui.accounts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.meroshare.data.model.Account
-import com.meroshare.data.repository.MeroShareRepository
+import com.share_manager.data.model.Account
+import com.share_manager.data.repository.MeroShareRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch

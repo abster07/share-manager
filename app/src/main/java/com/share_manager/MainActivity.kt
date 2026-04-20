@@ -1,4 +1,4 @@
-package com.meroshare
+package com.share_manager
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -19,9 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
-import com.meroshare.ui.accounts.AccountsScreen
-import com.meroshare.ui.results.ResultsScreen
-import com.meroshare.ui.theme.*
+import com.share_manager.ui.accounts.AccountsScreen
+import com.share_manager.ui.results.ResultsScreen
+import com.share_manager.ui.theme.*
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

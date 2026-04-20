@@ -1,4 +1,4 @@
-package com.meroshare.ui.results
+package com.share_manager.ui.results
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -19,10 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.meroshare.data.model.CompanyShare
-import com.meroshare.data.model.ResultStatus
-import com.meroshare.ui.components.*
-import com.meroshare.ui.theme.*
+import com.share_manager.data.model.CompanyShare
+import com.share_manager.data.model.ResultStatus
+import com.share_manager.ui.components.*
+import com.share_manager.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +35,7 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
     val notAllotted = state.accountResults.count { it.status is ResultStatus.NotAllotted }
     val errors = state.accountResults.count { it.status is ResultStatus.Error }
     val totalQty = state.accountResults
-        .filterIsInstance<com.meroshare.data.model.AccountResult>()
+        .filterIsInstance<com.share_manager.data.model.AccountResult>()
         .sumOf { (it.status as? ResultStatus.Allotted)?.quantity ?: 0 }
 
     LazyColumn(

@@ -1,4 +1,4 @@
-package com.meroshare.data.model
+package com.share_manager.data.model
 
 // ── Room Entity ──────────────────────────────────────────────────────────────
 

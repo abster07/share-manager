@@ -8,7 +8,7 @@
 
 # Gson
 -keep class com.google.gson.** { *; }
--keep class com.meroshare.data.model.** { *; }
+-keep class com.share_manager.data.model.** { *; }
 
 # OkHttp
 -dontwarn okhttp3.**
@@ -27,7 +27,7 @@
 }
 
 # Keep data classes used in API responses
--keepclassmembers class com.meroshare.data.model.** {
+-keepclassmembers class com.share_manager.data.model.** {
     <init>(...);
     <fields>;
 }

@@ -1,4 +1,4 @@
-package com.meroshare.ui.theme
+package com.share_manager.ui.theme
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable

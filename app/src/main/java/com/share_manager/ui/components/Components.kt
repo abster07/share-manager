@@ -1,4 +1,4 @@
-package com.meroshare.ui.components
+package com.share_manager.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -18,9 +18,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.meroshare.data.model.AccountResult
-import com.meroshare.data.model.ResultStatus
-import com.meroshare.ui.theme.*
+import com.share_manager.data.model.AccountResult
+import com.share_manager.data.model.ResultStatus
+import com.share_manager.ui.theme.*
 
 @Composable
 fun StatusBadge(status: ResultStatus) {
