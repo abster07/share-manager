@@ -150,7 +150,7 @@ class MeroShareRepository @Inject constructor(
     suspend fun checkResult(companyShareId: Int, boid: String): ResultStatus =
         withContext(Dispatchers.IO) {
             runCatching {
-                val payload = """{"companyShareId":$companyShareId,"boid":"$boid","userCaptcha":"28157","captchaIdentifier":"b12025e7-12bc-4c87-8919-54b68c03f780"}"""
+                val payload = """{"companyShareId":$companyShareId,"boid":"$boid","userCaptcha":"41931","captchaIdentifier":"1b408643-171a-4f30-a515-559f11512a02"}"""
                 log("POST check | companyShareId=$companyShareId boid=${boid.takeLast(4).padStart(boid.length, '*')}")
 
                 val body = payload.toRequestBody("application/json".toMediaType())
