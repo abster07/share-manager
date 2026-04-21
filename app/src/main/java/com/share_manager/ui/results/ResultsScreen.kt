@@ -6,6 +6,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,13 +32,10 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showCompanyPicker by remember { mutableStateOf(false) }
 
-    // Summary stats
-    val allotted = state.accountResults.count { it.status is ResultStatus.Allotted }
+    val allotted    = state.accountResults.count { it.status is ResultStatus.Allotted }
     val notAllotted = state.accountResults.count { it.status is ResultStatus.NotAllotted }
-    val errors = state.accountResults.count { it.status is ResultStatus.Error }
-    val totalQty = state.accountResults
-        .filterIsInstance<com.share_manager.data.model.AccountResult>()
-        .sumOf { (it.status as? ResultStatus.Allotted)?.quantity ?: 0 }
+    val errors      = state.accountResults.count { it.status is ResultStatus.Error }
+    val totalQty    = state.accountResults.sumOf { (it.status as? ResultStatus.Allotted)?.quantity ?: 0 }
 
     LazyColumn(
         modifier = Modifier
@@ -64,8 +63,7 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(Icons.Default.Error, null, tint = Red400, modifier = Modifier.size(18.dp))
-                    Text(state.errorMessage!!, color = Red400, fontSize = 13.sp)
-                    Spacer(Modifier.weight(1f))
+                    Text(state.errorMessage!!, color = Red400, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     IconButton(onClick = viewModel::clearError, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.Close, null, tint = Red400)
                     }
@@ -105,8 +103,7 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                         ) {
                             Text(
                                 "Checking ${(state.progress * state.accounts.size).toInt()} / ${state.accounts.size}…",
-                                fontSize = 12.sp,
-                                color = Color(0xFF94A3B8)
+                                fontSize = 12.sp, color = Color(0xFF94A3B8)
                             )
                             OutlinedButton(
                                 onClick = viewModel::cancelCheck,
@@ -147,13 +144,10 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
             }
         }
 
-        // Stats row (show only after results)
+        // Stats row
         if (state.accountResults.isNotEmpty()) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatCard("Allotted", allotted.toString(), Green400, Modifier.weight(1f))
                     StatCard("Not Allotted", notAllotted.toString(), Red400, Modifier.weight(1f))
                     StatCard("Errors", errors.toString(), Amber400, Modifier.weight(1f))
@@ -172,12 +166,7 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Total Allotted Shares", color = Green400, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "$totalQty units",
-                            color = Green400,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 20.sp
-                        )
+                        Text("$totalQty units", color = Green400, fontWeight = FontWeight.Black, fontSize = 20.sp)
                     }
                 }
             }
@@ -185,9 +174,7 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
             item {
                 Text(
                     "Results  (${state.accountResults.size})",
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF94A3B8),
-                    fontSize = 13.sp
+                    fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8), fontSize = 13.sp
                 )
             }
 
@@ -195,11 +182,22 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                 AccountResultCard(result)
             }
 
-            item { Spacer(Modifier.height(80.dp)) }
+            item { Spacer(Modifier.height(8.dp)) }
         }
+
+        // ── Debug Log Panel ───────────────────────────────────────────────────
+        item {
+            DebugLogPanel(
+                log = state.debugLog,
+                expanded = state.showDebugLog,
+                onToggle = viewModel::toggleDebugLog,
+                onClear = viewModel::clearDebugLog
+            )
+        }
+
+        item { Spacer(Modifier.height(80.dp)) }
     }
 
-    // Company bottom sheet picker
     if (showCompanyPicker) {
         CompanyPickerSheet(
             companies = state.companies,
@@ -212,6 +210,131 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
         )
     }
 }
+
+// ── Debug Log Panel ───────────────────────────────────────────────────────────
+
+@Composable
+private fun DebugLogPanel(
+    log: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onClear: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+
+    // Auto-scroll to bottom when log updates and panel is open
+    LaunchedEffect(log, expanded) {
+        if (expanded) scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117)),
+        border = BorderStroke(1.dp, Color(0xFF30363D))
+    ) {
+        Column {
+            // Header row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Terminal,
+                    contentDescription = null,
+                    tint = Color(0xFF58A6FF),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    "Network Debug Log",
+                    color = Color(0xFF58A6FF),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.weight(1f)
+                )
+                if (log.isNotEmpty()) {
+                    Text(
+                        "${log.lines().size} lines",
+                        color = Color(0xFF8B949E),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                if (expanded && log.isNotEmpty()) {
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp))
+                    }
+                }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    null,
+                    tint = Color(0xFF8B949E),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Log body
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                HorizontalDivider(color = Color(0xFF21262D))
+
+                if (log.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No log yet. Tap refresh or check results.",
+                            color = Color(0xFF8B949E),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        log.lines().forEach { line ->
+                            val color = when {
+                                line.contains("ERROR") || line.contains("FAILURE") -> Color(0xFFFF7B72)
+                                line.contains("HTTP 2") -> Color(0xFF3FB950)
+                                line.contains("HTTP") -> Color(0xFFFF7B72)
+                                line.contains("BODY") || line.contains("body") -> Color(0xFFD2A8FF)
+                                line.contains("size =") || line.contains("parsed=") -> Color(0xFFFFA657)
+                                line.startsWith("[") -> Color(0xFF8B949E)
+                                else -> Color(0xFFE6EDF3)
+                            }
+                            Text(
+                                text = line,
+                                color = color,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Company Selector Card ─────────────────────────────────────────────────────
 
 @Composable
 private fun CompanySelectorCard(
@@ -243,8 +366,7 @@ private fun CompanySelectorCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     if (selected != null) "IPO Company" else "Select IPO Company",
-                    fontSize = 11.sp,
-                    color = Color(0xFF64748B)
+                    fontSize = 11.sp, color = Color(0xFF64748B)
                 )
                 if (selected != null) {
                     Text(selected.name, color = OnSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -264,6 +386,8 @@ private fun CompanySelectorCard(
         }
     }
 }
+
+// ── Company Picker Sheet ──────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -292,12 +416,7 @@ private fun CompanyPickerSheet(
         }
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(
-                "Select IPO Company",
-                fontWeight = FontWeight.Bold,
-                color = OnSurface,
-                fontSize = 18.sp
-            )
+            Text("Select IPO Company", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 18.sp)
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
@@ -318,12 +437,20 @@ private fun CompanyPickerSheet(
                     disabledContainerColor = Color.Transparent
                 )
             )
-
             Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
                 Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Gold400)
+                }
+            } else if (companies.isEmpty()) {
+                // Empty state — gives the user a visual cue that fetching failed/returned nothing
+                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.CloudOff, null, tint = Color(0xFF475569), modifier = Modifier.size(36.dp))
+                        Text("No companies loaded", color = Color(0xFF64748B), fontSize = 13.sp)
+                        Text("Check the Debug Log for details", color = Color(0xFF475569), fontSize = 12.sp)
+                    }
                 }
             } else {
                 LazyColumn(

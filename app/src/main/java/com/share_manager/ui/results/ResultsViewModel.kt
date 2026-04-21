@@ -15,9 +15,11 @@ data class ResultsUiState(
     val accountResults: List<AccountResult> = emptyList(),
     val isLoadingCompanies: Boolean = false,
     val isChecking: Boolean = false,
-    val progress: Float = 0f,        // 0..1
+    val progress: Float = 0f,
     val errorMessage: String? = null,
-    val accounts: List<Account> = emptyList()
+    val accounts: List<Account> = emptyList(),
+    val debugLog: String = "",         // live-updated debug log
+    val showDebugLog: Boolean = false  // toggle visibility
 )
 
 @HiltViewModel
@@ -43,10 +45,22 @@ class ResultsViewModel @Inject constructor(
         _uiState.update { it.copy(isLoadingCompanies = true, errorMessage = null) }
         repository.getCompanyShares()
             .onSuccess { companies ->
-                _uiState.update { it.copy(companies = companies, isLoadingCompanies = false) }
+                _uiState.update {
+                    it.copy(
+                        companies = companies,
+                        isLoadingCompanies = false,
+                        debugLog = repository.debugLog
+                    )
+                }
             }
             .onFailure { e ->
-                _uiState.update { it.copy(isLoadingCompanies = false, errorMessage = e.message) }
+                _uiState.update {
+                    it.copy(
+                        isLoadingCompanies = false,
+                        errorMessage = e.message,
+                        debugLog = repository.debugLog
+                    )
+                }
             }
     }
 
@@ -61,18 +75,12 @@ class ResultsViewModel @Inject constructor(
 
         checkJob?.cancel()
         checkJob = viewModelScope.launch {
-            // Initialise all as loading
             val initial = accounts.map { AccountResult(it, ResultStatus.Loading) }
             _uiState.update {
-                it.copy(
-                    isChecking = true,
-                    accountResults = initial,
-                    progress = 0f
-                )
+                it.copy(isChecking = true, accountResults = initial, progress = 0f)
             }
 
             accounts.forEachIndexed { index, account ->
-                // Skip foreign-employment accounts if company is not FE
                 val isFE = company.name.contains("Foreign Employment", ignoreCase = true)
                 val status = if (account.isForeignEmployment && !isFE) {
                     ResultStatus.NotAllotted("Skipped — Not a Foreign Employment IPO")
@@ -87,15 +95,15 @@ class ResultsViewModel @Inject constructor(
                     updated[index] = AccountResult(account, status)
                     state.copy(
                         accountResults = updated,
-                        progress = (index + 1).toFloat() / accounts.size
+                        progress = (index + 1).toFloat() / accounts.size,
+                        debugLog = repository.debugLog
                     )
                 }
 
-                // Small delay to avoid rate limiting
                 if (index < accounts.size - 1) delay(500)
             }
 
-            _uiState.update { it.copy(isChecking = false, progress = 1f) }
+            _uiState.update { it.copy(isChecking = false, progress = 1f, debugLog = repository.debugLog) }
         }
     }
 
@@ -112,4 +120,11 @@ class ResultsViewModel @Inject constructor(
     }
 
     fun clearError() = _uiState.update { it.copy(errorMessage = null) }
+
+    fun toggleDebugLog() = _uiState.update { it.copy(showDebugLog = !it.showDebugLog) }
+
+    fun clearDebugLog() {
+        repository.clearLog()
+        _uiState.update { it.copy(debugLog = "") }
+    }
 }
