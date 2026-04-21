@@ -45,28 +45,38 @@ class MeroShareRepository @Inject constructor(
     // ── IPO Companies — raw OkHttp to avoid Gson strictness issues ────────────
 
     suspend fun getCompanyShares(): Result<List<CompanyShare>> = runCatching {
-        val request = Request.Builder()
-            .url("https://iporesult.cdsc.com.np/result/companyShares/fileUploaded")
-            .addHeader("Accept", "application/json, text/plain, */*")
-            .get()
-            .build()
+    val request = Request.Builder()
+        .url("https://iporesult.cdsc.com.np/result/companyShares/fileUploaded")
+        .addHeader("Accept", "application/json, text/plain, */*")
+        .get()
+        .build()
 
-        val responseStr = okHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
-        val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
-        val list = json.getAsJsonObject("body")
-            ?.getAsJsonArray("companyShareList")
-            ?: return@runCatching emptyList()
-
-        list.map { el ->
-            val obj = el.asJsonObject
-            CompanyShare(
-                id = obj.get("id").asInt,
-                name = obj.get("name").asString,
-                scrip = obj.get("scrip").asString,
-                isFileUploaded = obj.get("isFileUploaded").asBoolean
-            )
-        }.filter { it.isFileUploaded }
+    val response = okHttpClient.newCall(request).execute()
+    val responseStr = response.body?.string() ?: ""
+    
+    // Add this for debugging
+    android.util.Log.d("MeroShare", "Status: ${response.code}, Body: ${responseStr.take(200)}")
+    
+    if (!response.isSuccessful) {
+        throw Exception("HTTP ${response.code}")
     }
+
+    val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
+    val body = json.getAsJsonObject("body") 
+        ?: throw Exception("No body in response")
+    val list = body.getAsJsonArray("companyShareList") 
+        ?: return@runCatching emptyList()
+
+    list.map { el ->
+        val obj = el.asJsonObject
+        CompanyShare(
+            id = obj.get("id").asInt,
+            name = obj.get("name").asString,
+            scrip = obj.get("scrip").asString,
+            isFileUploaded = obj.get("isFileUploaded").asBoolean
+        )
+    }.filter { it.isFileUploaded }
+}
 
     // ── Result Check — raw OkHttp ─────────────────────────────────────────────
 

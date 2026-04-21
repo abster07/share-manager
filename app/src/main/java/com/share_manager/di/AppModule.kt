@@ -28,14 +28,6 @@ object AppModule {
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         })
-        .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader("Accept", "application/json, text/plain, */*")
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "null")
-                .build()
-            chain.proceed(request)
-        }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
