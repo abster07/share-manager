@@ -22,7 +22,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class MeroShareUserRepository @Inject constructor(
-    private val api: MeroShareApiService,
+    private val api: ApiService,
     private val capitalsRepository: CapitalsRepository
 ) {
 
