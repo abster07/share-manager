@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "debug" ]
 
 permissions:
   contents: write
@@ -36,14 +36,14 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build APK
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Rename APK to universal name
-        run: mv app/build/outputs/apk/release/app-release.apk ${{ env.APK_NAME }}
+        run: mv app/build/outputs/apk/debug/app-debug.apk ${{ env.APK_NAME }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

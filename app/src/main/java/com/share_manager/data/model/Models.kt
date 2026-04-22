@@ -1,32 +1,38 @@
 package com.share_manager.data.model
 
-// ── Room Entity ──────────────────────────────────────────────────────────────
-
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+
+// ── Room Entity ──────────────────────────────────────────────────────────────
 
 @Entity(tableName = "accounts")
 data class Account(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val name: String,           // friendly label e.g. "Ram's Account"
-    val boid: String,           // 16-digit, required
-    val crn: String = "",       // optional
-    val transactionPin: String = "", // optional, stored encrypted
+    val name: String = "",
+    val boid: String = "",           // 16-digit BOID
+    val crn: String = "",            // optional
+    val transactionPin: String = "", // stored AES-256-GCM encrypted
     val isForeignEmployment: Boolean = false
 )
 
-// ── Network DTOs ─────────────────────────────────────────────────────────────
+// ── Network DTOs — iporesult.cdsc.com.np ─────────────────────────────────────
 
-data class CompanyShareListResponse(
-    val success: Boolean,
-    val message: String,
-    val body: CompanyShareBody?
-)
-
-data class CompanyShareBody(
-    val companyShareList: List<CompanyShare>
-)
-
+/**
+ * Represents a single company share entry from:
+ * GET /result/companyShares/fileUploaded
+ *
+ * Raw JSON shape:
+ * {
+ *   "success": true,
+ *   "body": {
+ *     "companyShareList": [
+ *       { "id": 1, "name": "...", "scrip": "...", "isFileUploaded": true }
+ *     ]
+ *   }
+ * }
+ *
+ * Only entries where isFileUploaded == true are kept (results are available).
+ */
 data class CompanyShare(
     val id: Int,
     val name: String,
@@ -34,17 +40,19 @@ data class CompanyShare(
     val isFileUploaded: Boolean
 )
 
+/**
+ * Request body for:
+ * POST /result/result/check
+ *
+ * NOTE: userCaptcha and captchaIdentifier are static values the server
+ * currently accepts. If the endpoint ever enforces real captchas these
+ * will need to be fetched dynamically.
+ */
 data class ResultCheckRequest(
     val companyShareId: Int,
     val boid: String,
-    val userCaptcha: String = "28157",
-    val captchaIdentifier: String = "b12025e7-12bc-4c87-8919-54b68c03f780"
-)
-
-data class ResultCheckResponse(
-    val success: Boolean,
-    val message: String,
-    val body: Any?
+    val userCaptcha: String,
+    val captchaIdentifier: String
 )
 
 // ── UI State ──────────────────────────────────────────────────────────────────

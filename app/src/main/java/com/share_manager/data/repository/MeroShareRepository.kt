@@ -4,10 +4,11 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.share_manager.data.db.AccountDao
 import com.share_manager.data.model.*
-import com.share_manager.network.IpoApiService
 import com.share_manager.util.EncryptionUtil
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,15 +18,22 @@ import javax.inject.Singleton
 
 @Singleton
 class MeroShareRepository @Inject constructor(
-    private val api: IpoApiService,
     private val dao: AccountDao,
     private val okHttpClient: OkHttpClient
 ) {
 
     private val gson = Gson()
 
+    // ── Captcha constants ─────────────────────────────────────────────────────
+    // The iporesult endpoint currently accepts these static values.
+    // If the backend ever enforces a real captcha challenge these must be
+    // fetched from a /captcha endpoint before each result check.
+    private val captchaValue      = "28157"
+    private val captchaIdentifier = "b12025e7-12bc-4c87-8919-54b68c03f780"
+
     // ── Accounts ──────────────────────────────────────────────────────────────
 
+    /** Emits the decrypted account list whenever the DB changes. */
     val accounts: Flow<List<Account>> = dao.getAllAccounts().map { list ->
         list.map { acc ->
             acc.copy(transactionPin = EncryptionUtil.decrypt(acc.transactionPin))
@@ -42,60 +50,102 @@ class MeroShareRepository @Inject constructor(
 
     suspend fun deleteAccount(account: Account) = dao.deleteAccount(account)
 
-    // ── IPO Companies — raw OkHttp to avoid Gson strictness issues ────────────
+    // ── Company shares ────────────────────────────────────────────────────────
 
-    suspend fun getCompanyShares(): Result<List<CompanyShare>> = runCatching {
-        val request = Request.Builder()
-            .url("https://iporesult.cdsc.com.np/result/companyShares/fileUploaded")
-            .addHeader("Accept", "application/json, text/plain, */*")
-            .get()
-            .build()
+    /**
+     * GET https://iporesult.cdsc.com.np/result/companyShares/fileUploaded
+     *
+     * Uses raw OkHttp + manual Gson parsing because the server sometimes
+     * returns non-strict JSON that Retrofit/GsonConverterFactory rejects.
+     *
+     * Returns only companies where [CompanyShare.isFileUploaded] == true,
+     * meaning the result file has been uploaded and can be queried.
+     */
+    suspend fun getCompanyShares(): Result<List<CompanyShare>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url("https://iporesult.cdsc.com.np/result/companyShares/fileUploaded")
+                .addHeader("Accept", "application/json, text/plain, */*")
+                .get()
+                .build()
 
-        val responseStr = okHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
-        val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
-        val list = json.getAsJsonObject("body")
-            ?.getAsJsonArray("companyShareList")
-            ?: return@runCatching emptyList()
+            val responseStr = okHttpClient.newCall(request).execute()
+                .use { it.body?.string().orEmpty() }
 
-        list.map { el ->
-            val obj = el.asJsonObject
-            CompanyShare(
-                id = obj.get("id").asInt,
-                name = obj.get("name").asString,
-                scrip = obj.get("scrip").asString,
-                isFileUploaded = obj.get("isFileUploaded").asBoolean
-            )
-        }.filter { it.isFileUploaded }
-    }
+            val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
 
-    // ── Result Check — raw OkHttp ─────────────────────────────────────────────
+            val success = json.get("success")?.asBoolean ?: false
+            if (!success) {
+                val msg = json.get("message")?.asString ?: "Unknown error from server"
+                throw IllegalStateException(msg)
+            }
 
-    suspend fun checkResult(companyShareId: Int, boid: String): ResultStatus = runCatching {
-        val payload = """{"companyShareId":$companyShareId,"boid":"$boid","userCaptcha":"28157","captchaIdentifier":"b12025e7-12bc-4c87-8919-54b68c03f780"}"""
-        val body = payload.toRequestBody("application/json".toMediaType())
+            val list = json.getAsJsonObject("body")
+                ?.getAsJsonArray("companyShareList")
+                ?: return@runCatching emptyList()
 
-        val request = Request.Builder()
-            .url("https://iporesult.cdsc.com.np/result/result/check")
-            .addHeader("Accept", "application/json, text/plain, */*")
-            .addHeader("Authorization", "null")
-            .post(body)
-            .build()
-
-        val responseStr = okHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
-        val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
-
-        val success = json.get("success")?.asBoolean ?: false
-        val message = json.get("message")?.asString ?: ""
-
-        if (success && (message.contains("Alloted", ignoreCase = true) ||
-                        message.contains("Allotted", ignoreCase = true))) {
-            val qty = Regex("""quantity\s*:\s*(\d+)""", RegexOption.IGNORE_CASE)
-                .find(message)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            ResultStatus.Allotted(qty, message)
-        } else {
-            ResultStatus.NotAllotted(message.ifEmpty { "Not allotted" })
+            list.mapNotNull { el ->
+                runCatching {
+                    val obj = el.asJsonObject
+                    CompanyShare(
+                        id            = obj.get("id").asInt,
+                        name          = obj.get("name").asString,
+                        scrip         = obj.get("scrip").asString,
+                        isFileUploaded = obj.get("isFileUploaded").asBoolean
+                    )
+                }.getOrNull()
+            }.filter { it.isFileUploaded }
         }
-    }.getOrElse { e ->
-        ResultStatus.Error(e.message ?: "Unknown error")
     }
+
+    // ── Result check ──────────────────────────────────────────────────────────
+
+    /**
+     * POST https://iporesult.cdsc.com.np/result/result/check
+     *
+     * Response success message contains allotment info, e.g.:
+     *   "Congratulations! ... quantity : 10 ..."
+     * or failure:
+     *   "Your BOID is not registered..." / "No record found"
+     */
+    suspend fun checkResult(companyShareId: Int, boid: String): ResultStatus =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val payload = gson.toJson(
+                    ResultCheckRequest(
+                        companyShareId = companyShareId,
+                        boid           = boid,
+                        userCaptcha    = captchaValue,
+                        captchaIdentifier = captchaIdentifier
+                    )
+                )
+                val body = payload.toRequestBody("application/json".toMediaType())
+
+                val request = Request.Builder()
+                    .url("https://iporesult.cdsc.com.np/result/result/check")
+                    .addHeader("Accept", "application/json, text/plain, */*")
+                    .addHeader("Authorization", "null")
+                    .post(body)
+                    .build()
+
+                val responseStr = okHttpClient.newCall(request).execute()
+                    .use { it.body?.string().orEmpty() }
+
+                val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
+
+                val success  = json.get("success")?.asBoolean ?: false
+                val message  = json.get("message")?.asString.orEmpty()
+
+                if (success && message.contains("allot", ignoreCase = true)) {
+                    // Parse "quantity : 10" from the message
+                    val qty = Regex("""quantity\s*:\s*(\d+)""", RegexOption.IGNORE_CASE)
+                        .find(message)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                    ResultStatus.Allotted(qty, message)
+                } else {
+                    ResultStatus.NotAllotted(message.ifEmpty { "Not allotted" })
+                }
+            }.getOrElse { e ->
+                ResultStatus.Error(e.message ?: "Unknown error")
+            }
+        }
 }

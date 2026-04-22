@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AccountDao {
+
     @Query("SELECT * FROM accounts ORDER BY id ASC")
     fun getAllAccounts(): Flow<List<Account>>
 
@@ -27,7 +28,11 @@ interface AccountDao {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-@Database(entities = [Account::class], version = 1, exportSchema = false)
+@Database(
+    entities = [Account::class],
+    version = 1,
+    exportSchema = true   // Set to true so schema is tracked in version control
+)
 abstract class MeroShareDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
 }

@@ -1,20 +1,9 @@
 package com.share_manager.network
 
-import com.share_manager.data.model.CompanyShareListResponse
-import com.share_manager.data.model.ResultCheckRequest
-import com.share_manager.data.model.ResultCheckResponse
-import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.POST
+// Retrofit is wired up in AppModule but the iporesult.cdsc.com.np API
+// returns inconsistent JSON (sometimes lenient / non-standard) so all
+// network calls in MeroShareRepository use raw OkHttp + manual Gson
+// parsing for reliability. This interface is kept as a placeholder and
+// can be used for future strictly-typed endpoints.
 
-interface IpoApiService {
-
-    @GET("result/companyShares/fileUploaded")
-    suspend fun getCompanyShares(): Response<CompanyShareListResponse>
-
-    @POST("result/result/check")
-    suspend fun checkResult(
-        @Body request: ResultCheckRequest
-    ): Response<ResultCheckResponse>
-}
+// (intentionally empty — remove file entirely if you never add endpoints here)

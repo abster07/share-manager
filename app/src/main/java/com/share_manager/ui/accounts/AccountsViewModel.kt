@@ -35,19 +35,19 @@ class AccountsViewModel @Inject constructor(
     fun saveAccount(account: Account) = viewModelScope.launch {
         runCatching { repository.saveAccount(account) }
             .onSuccess { _uiState.update { it.copy(successMessage = "Account saved!") } }
-            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message) } }
+            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message ?: "Save failed") } }
     }
 
     fun updateAccount(account: Account) = viewModelScope.launch {
         runCatching { repository.updateAccount(account) }
             .onSuccess { _uiState.update { it.copy(successMessage = "Account updated!") } }
-            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message) } }
+            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message ?: "Update failed") } }
     }
 
     fun deleteAccount(account: Account) = viewModelScope.launch {
         runCatching { repository.deleteAccount(account) }
             .onSuccess { _uiState.update { it.copy(successMessage = "Account deleted") } }
-            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message) } }
+            .onFailure { e -> _uiState.update { it.copy(errorMessage = e.message ?: "Delete failed") } }
     }
 
     fun clearMessage() = _uiState.update { it.copy(successMessage = null, errorMessage = null) }
