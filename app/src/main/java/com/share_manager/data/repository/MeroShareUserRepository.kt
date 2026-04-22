@@ -1,7 +1,7 @@
 package com.share_manager.data.repository
 
 import com.share_manager.data.model.*
-import com.share_manager.network.MeroShareApiService
+import com.share_manager.network.ApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
