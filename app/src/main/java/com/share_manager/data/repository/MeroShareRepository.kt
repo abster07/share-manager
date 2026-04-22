@@ -2,6 +2,8 @@ package com.share_manager.data.repository
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import com.google.gson.JsonSyntaxException
 import com.share_manager.data.db.AccountDao
 import com.share_manager.data.model.*
 import com.share_manager.util.EncryptionUtil
@@ -90,8 +92,22 @@ class MeroShareRepository @Inject constructor(
             val responseStr = okHttpClient.newCall(request).execute()
                 .use { it.body?.string().orEmpty() }
 
-            val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
+            // Safely parse the root element — the server sometimes returns a bare
+            // string or number instead of an object (e.g. during maintenance), which
+            // causes a JsonSyntaxException if we cast directly to JsonObject.
+            val root = try {
+                JsonParser.parseString(responseStr.trim())
+            } catch (e: JsonSyntaxException) {
+                throw IllegalStateException("Invalid JSON from server: ${responseStr.take(120)}")
+            }
 
+            // If the root is not an object, surface it as a readable error.
+            if (!root.isJsonObject) {
+                val preview = if (root.isJsonPrimitive) root.asString else responseStr.take(120)
+                throw IllegalStateException("Unexpected server response: $preview")
+            }
+
+            val json    = root.asJsonObject
             val success = json.get("success")?.asBoolean ?: false
             if (!success) {
                 val msg = json.get("message")?.asString ?: "Unknown error from server"
@@ -146,7 +162,18 @@ class MeroShareRepository @Inject constructor(
                 val responseStr = okHttpClient.newCall(request).execute()
                     .use { it.body?.string().orEmpty() }
 
-                val json    = gson.fromJson(responseStr.trim(), JsonObject::class.java)
+                val root = try {
+                    JsonParser.parseString(responseStr.trim())
+                } catch (e: JsonSyntaxException) {
+                    throw IllegalStateException("Invalid JSON from server: ${responseStr.take(120)}")
+                }
+
+                if (!root.isJsonObject) {
+                    val preview = if (root.isJsonPrimitive) root.asString else responseStr.take(120)
+                    throw IllegalStateException("Unexpected server response: $preview")
+                }
+
+                val json    = root.asJsonObject
                 val success = json.get("success")?.asBoolean ?: false
                 val message = json.get("message")?.asString.orEmpty()
 
