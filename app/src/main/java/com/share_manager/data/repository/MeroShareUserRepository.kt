@@ -13,9 +13,9 @@ import javax.inject.Singleton
  * Mirrors the Python script's UserSession class.
  *
  * Lifecycle per account:
- *   1. login(account)              → stores token
- *   2. fetchBranchInfo(token, dp)  → stores bank/branch
- *   3. getOpenIssues / apply / generateReports
+ *   1. login(account)              → returns Bearer token
+ *   2. fetchBranchInfo(token, dp)  → returns bank/branch details
+ *   3. getOpenIssues / canApply / applyForAccount / generateReports
  *
  * Each public function is self-contained — it logs in, does the work, and
  * returns a clean result so the ViewModel never has to manage raw tokens.
@@ -31,13 +31,23 @@ class MeroShareUserRepository @Inject constructor(
     /**
      * Logs in and returns the Bearer token.
      * Mirrors: UserSession.create_session()
+     *
+     * The server returns the token in the **Authorization** response header,
+     * not in the body.
      */
     suspend fun login(account: Account): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val clientId = capitalsRepository.getClientId(account.dp)
                 ?: throw IllegalArgumentException("Unknown DP code: ${account.dp}")
 
-            val response = api.login(AuthRequest(clientId, account.username, account.password))
+            val response = api.login(
+                AuthRequest(
+                    clientId = clientId,
+                    username = account.username,   // username == boid
+                    password = account.password
+                )
+            )
+
             if (!response.isSuccessful) {
                 throw Exception("Login failed for ${account.username}: HTTP ${response.code()}")
             }
@@ -50,20 +60,23 @@ class MeroShareUserRepository @Inject constructor(
     // ── Bank / Branch ─────────────────────────────────────────────────────────
 
     /**
+     * Fetches the first bank linked to the account, then retrieves its
+     * first branch/account details.
+     *
      * Mirrors: UserSession.set_branch_info() + UserSession.bank_info()
      */
-    suspend fun fetchBranchInfo(token: String, accountUser: String): Result<BranchInfo> =
+    suspend fun fetchBranchInfo(token: String, accountName: String): Result<BranchInfo> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val banksResp = api.getBanks(token)
                 if (!banksResp.isSuccessful || banksResp.body().isNullOrEmpty()) {
-                    throw Exception("No banks found for user: $accountUser")
+                    throw Exception("No banks found for user: $accountName")
                 }
                 val bank = banksResp.body()!!.first()
 
                 val branchResp = api.getBranchInfo(bank.id, token)
                 if (!branchResp.isSuccessful || branchResp.body().isNullOrEmpty()) {
-                    throw Exception("Unable to fetch branch info for user: $accountUser")
+                    throw Exception("Unable to fetch branch info for user: $accountName")
                 }
 
                 branchResp.body()!!.first().also { it.bankId = bank.id }
@@ -76,19 +89,22 @@ class MeroShareUserRepository @Inject constructor(
      * Mirrors: UserSession.open_issues()
      * Returns all currently applicable issues for this account's token.
      */
-    suspend fun getOpenIssues(token: String): Result<List<IssueJson>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val response = api.getApplicableIssues(ApplicableIssueRequest(), token)
-            if (!response.isSuccessful) throw Exception("Error fetching open issues: HTTP ${response.code()}")
-            response.body()?.`object` ?: emptyList()
+    suspend fun getOpenIssues(token: String): Result<List<IssueJson>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = api.getApplicableIssues(ApplicableIssueRequest(), token)
+                if (!response.isSuccessful) {
+                    throw Exception("Error fetching open issues: HTTP ${response.code()}")
+                }
+                response.body()?.`object` ?: emptyList()
+            }
         }
-    }
 
     // ── Can Apply ─────────────────────────────────────────────────────────────
 
     /**
      * Mirrors: UserSession.can_apply()
-     * demat = "130" + dp + username  (from Python: f"130{self.account.dp}{self.account.username}")
+     * demat = "130" + dp + username  (Python: f"130{self.account.dp}{self.account.username}")
      */
     suspend fun canApply(token: String, account: Account, companyShareId: Int): Boolean =
         withContext(Dispatchers.IO) {
@@ -103,7 +119,7 @@ class MeroShareUserRepository @Inject constructor(
 
     /**
      * Full apply flow for one account — mirrors the Python __main__ apply block.
-     * Handles: login → branch info → can-apply check → POST apply
+     * Steps: login → branch info → verify unapplied issue → can-apply → POST apply
      */
     suspend fun applyForAccount(
         account: Account,
@@ -117,7 +133,7 @@ class MeroShareUserRepository @Inject constructor(
             // 2. Branch info
             val branch = fetchBranchInfo(token, account.name).getOrThrow()
 
-            // 3. Verify issue exists and is unapplied
+            // 3. Verify the issue exists and is unapplied
             val issues = getOpenIssues(token).getOrThrow()
             val issue = issues.firstOrNull {
                 it.isUnappliedOrdinary && it.companyShareId == companyShareId
@@ -127,22 +143,24 @@ class MeroShareUserRepository @Inject constructor(
 
             // 4. Can-apply check
             if (!canApply(token, account, companyShareId)) {
-                return@runCatching ApplyStatus.Skipped("Server says cannot apply for ${account.name}")
+                return@runCatching ApplyStatus.Skipped(
+                    "Server says cannot apply for ${account.name}"
+                )
             }
 
-            // 5. Apply
+            // 5. Submit application
             val payload = ApplyRequest(
-                demat = buildDemat(account),
-                boid = account.username,
-                accountNumber = branch.accountNumber,
-                customerId = branch.id,
+                demat           = buildDemat(account),
+                boid            = account.username,
+                accountNumber   = branch.accountNumber,
+                customerId      = branch.id,
                 accountBranchId = branch.accountBranchId,
-                accountTypeId = branch.accountTypeId,
-                appliedKitta = numberOfShares.toString(),
-                crnNumber = account.crn,
-                transactionPIN = account.transactionPin,
-                companyShareId = companyShareId.toString(),
-                bankId = branch.bankId
+                accountTypeId   = branch.accountTypeId,
+                appliedKitta    = numberOfShares.toString(),
+                crnNumber       = account.crn,
+                transactionPIN  = account.transactionPin,
+                companyShareId  = companyShareId.toString(),
+                bankId          = branch.bankId
             )
 
             val r = api.applyForShare(payload, token)
@@ -167,43 +185,43 @@ class MeroShareUserRepository @Inject constructor(
             runCatching {
                 val token = login(account).getOrThrow()
 
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val today = sdf.format(Date())
-                val cal = Calendar.getInstance().apply { add(Calendar.MONTH, -2) }
+                val sdf        = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val today      = sdf.format(Date())
+                val cal        = Calendar.getInstance().apply { add(Calendar.MONTH, -2) }
                 val twoMonthsAgo = sdf.format(cal.time)
 
                 val request = ReportRequest(
                     filterDateParams = listOf(
                         FilterDateParam(
-                            key = "appliedDate",
+                            key   = "appliedDate",
                             value = "BETWEEN '$twoMonthsAgo' AND '$today'"
                         )
                     )
                 )
 
                 val response = api.getApplicationReports(request, token)
-                if (!response.isSuccessful) throw Exception("Error fetching reports: HTTP ${response.code()}")
+                if (!response.isSuccessful) {
+                    throw Exception("Error fetching reports: HTTP ${response.code()}")
+                }
 
-                // The reports endpoint re-uses IssueListResponse shape for its object list.
-                // We parse only the fields we need via ReportItem mapping.
                 val rawItems = response.body()?.`object` ?: emptyList()
 
                 rawItems.map { issue ->
                     val item = ReportItem(
-                        applicantFormId = issue.companyShareId, // applicantFormId maps here
-                        companyName = issue.companyName,
-                        scrip = issue.scrip,
-                        appliedKitta = 0,
-                        statusName = issue.statusName
+                        applicantFormId = issue.companyShareId,
+                        companyName     = issue.companyName,
+                        scrip           = issue.scrip,
+                        appliedKitta    = 0,
+                        statusName      = issue.statusName
                     )
 
-                    // Enrich with allotment detail if status warrants it
+                    // Enrich with allotment detail when the application was processed
                     if (issue.statusName in listOf("TRANSACTION_SUCCESS", "APPROVED")) {
                         runCatching {
                             val detail = api.getAllotmentDetail(item.applicantFormId, token)
                             if (detail.isSuccessful) {
                                 item.allotmentStatus = detail.body()?.statusName ?: "N/A"
-                                item.allottedKitta = detail.body()?.allottedKitta ?: 0
+                                item.allottedKitta   = detail.body()?.allottedKitta ?: 0
                             }
                         }
                     }

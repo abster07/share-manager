@@ -33,9 +33,6 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
     var editingAccount by remember { mutableStateOf<Account?>(null) }
     var deleteTarget   by remember { mutableStateOf<Account?>(null) }
 
-    // Auto-dismiss the snackbar after 2 seconds.
-    // Only fire when a message appears (non-null → null transition would
-    // re-trigger, so we key on the actual string content).
     val toastMessage = state.successMessage ?: state.errorMessage
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -60,18 +57,14 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                     subtitle = "${state.accounts.size} account${if (state.accounts.size != 1) "s" else ""} saved"
                 )
                 GoldButton(
-                    text  = "Add",
+                    text    = "Add",
                     onClick = { showAddDialog = true },
-                    icon  = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    icon    = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Toast banner ─────────────────────────────────────────────────
-            // BUG FIX: Spacer was previously INSIDE the AnimatedVisibility
-            // block, causing it to animate in/out with the banner (wrong).
-            // It now lives OUTSIDE, as a separate sibling item.
             AnimatedVisibility(
                 visible = state.successMessage != null || state.errorMessage != null,
                 enter   = fadeIn() + expandVertically(),
@@ -84,7 +77,7 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isError) Color(0xFF3B1F1F) else Color(0xFF064E3B))
                         .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
@@ -121,7 +114,6 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
         }
     }
 
-    // ── Add / Edit dialog ─────────────────────────────────────────────────────
     if (showAddDialog || editingAccount != null) {
         AccountDialog(
             existing  = editingAccount,
@@ -135,7 +127,6 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
         )
     }
 
-    // ── Delete confirmation ───────────────────────────────────────────────────
     deleteTarget?.let { acc ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
@@ -171,7 +162,6 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar circle
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -191,7 +181,7 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
-                    verticalAlignment    = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
@@ -220,8 +210,20 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
                     fontFamily = FontFamily.Monospace
                 )
 
+                if (account.dp.isNotEmpty()) {
+                    Text(
+                        text     = "DP: ${account.dp}",
+                        fontSize = 11.sp,
+                        color    = Color(0xFF475569)
+                    )
+                }
+
                 if (account.crn.isNotEmpty()) {
-                    Text("CRN: ${account.crn}", fontSize = 11.sp, color = Color(0xFF475569))
+                    Text(
+                        text     = "CRN: ${account.crn}",
+                        fontSize = 11.sp,
+                        color    = Color(0xFF475569)
+                    )
                 }
             }
 
@@ -277,12 +279,15 @@ private fun AccountDialog(
     onDismiss: () -> Unit,
     onSave   : (Account) -> Unit
 ) {
-    var name       by remember { mutableStateOf(existing?.name           ?: "") }
-    var boid       by remember { mutableStateOf(existing?.boid           ?: "") }
-    var crn        by remember { mutableStateOf(existing?.crn            ?: "") }
-    var pin        by remember { mutableStateOf(existing?.transactionPin ?: "") }
-    var isFE       by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
-    var pinVisible by remember { mutableStateOf(false) }
+    var name            by remember { mutableStateOf(existing?.name              ?: "") }
+    var boid            by remember { mutableStateOf(existing?.boid              ?: "") }
+    var dp              by remember { mutableStateOf(existing?.dp                ?: "") }
+    var password        by remember { mutableStateOf(existing?.password          ?: "") }
+    var crn             by remember { mutableStateOf(existing?.crn               ?: "") }
+    var pin             by remember { mutableStateOf(existing?.transactionPin    ?: "") }
+    var isFE            by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
+    var pinVisible      by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     val boidError = boid.isNotEmpty() && boid.length != 16
     val canSave   = name.isNotBlank() && boid.length == 16
@@ -299,9 +304,12 @@ private fun AccountDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
 
-                // Name
+                // Name / Label
                 OutlinedTextField(
                     value         = name,
                     onValueChange = { name = it },
@@ -326,6 +334,40 @@ private fun AccountDialog(
                     textStyle       = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
                     modifier        = Modifier.fillMaxWidth(),
                     colors          = dialogFieldColors()
+                )
+
+                // DP / Broker code
+                OutlinedTextField(
+                    value         = dp,
+                    onValueChange = { dp = it.filter { c -> c.isDigit() } },
+                    label         = { Text("DP Code (broker code)") },
+                    placeholder   = { Text("e.g. 13200", color = Color(0xFF475569)) },
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier      = Modifier.fillMaxWidth(),
+                    colors        = dialogFieldColors()
+                )
+
+                // MeroShare password (encrypted at rest)
+                OutlinedTextField(
+                    value               = password,
+                    onValueChange       = { password = it },
+                    label               = { Text("MeroShare Password") },
+                    singleLine          = true,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None
+                                          else                  PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff
+                                              else                  Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                tint = Color(0xFF64748B)
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = dialogFieldColors()
                 )
 
                 // CRN (optional)
@@ -400,13 +442,13 @@ private fun AccountDialog(
                 text    = if (existing != null) "Update" else "Save",
                 enabled = canSave,
                 onClick = {
-                    // BUG FIX: Use a fresh Account() with default id=0 for new accounts
-                    // rather than a private extension function that shadows the class name.
                     val base = existing ?: Account()
                     onSave(
                         base.copy(
                             name                = name.trim(),
                             boid                = boid.trim(),
+                            dp                  = dp.trim(),
+                            password            = password,
                             crn                 = crn.trim(),
                             transactionPin      = pin,
                             isForeignEmployment = isFE
@@ -425,13 +467,13 @@ private fun AccountDialog(
 
 @Composable
 private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor    = Gold400,
-    unfocusedBorderColor  = Outline,
-    focusedLabelColor     = Gold400,
-    unfocusedLabelColor   = Color(0xFF64748B),
-    focusedTextColor      = OnSurface,
-    unfocusedTextColor    = OnSurface,
-    cursorColor           = Gold400,
+    focusedBorderColor      = Gold400,
+    unfocusedBorderColor    = Outline,
+    focusedLabelColor       = Gold400,
+    unfocusedLabelColor     = Color(0xFF64748B),
+    focusedTextColor        = OnSurface,
+    unfocusedTextColor      = OnSurface,
+    cursorColor             = Gold400,
     focusedContainerColor   = Color.Transparent,
     unfocusedContainerColor = Color.Transparent,
     disabledContainerColor  = Color.Transparent

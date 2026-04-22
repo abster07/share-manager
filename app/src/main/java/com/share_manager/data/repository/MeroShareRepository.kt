@@ -33,19 +33,38 @@ class MeroShareRepository @Inject constructor(
 
     // ── Accounts ──────────────────────────────────────────────────────────────
 
-    /** Emits the decrypted account list whenever the DB changes. */
+    /**
+     * Emits the fully-decrypted account list whenever the DB changes.
+     * Both [Account.password] and [Account.transactionPin] are stored
+     * encrypted and decrypted here before being exposed to the UI/ViewModels.
+     */
     val accounts: Flow<List<Account>> = dao.getAllAccounts().map { list ->
         list.map { acc ->
-            acc.copy(transactionPin = EncryptionUtil.decrypt(acc.transactionPin))
+            acc.copy(
+                password       = EncryptionUtil.decrypt(acc.password),
+                transactionPin = EncryptionUtil.decrypt(acc.transactionPin)
+            )
         }
     }
 
+    /** Encrypts sensitive fields before persisting a new account. */
     suspend fun saveAccount(account: Account) {
-        dao.insertAccount(account.copy(transactionPin = EncryptionUtil.encrypt(account.transactionPin)))
+        dao.insertAccount(
+            account.copy(
+                password       = EncryptionUtil.encrypt(account.password),
+                transactionPin = EncryptionUtil.encrypt(account.transactionPin)
+            )
+        )
     }
 
+    /** Encrypts sensitive fields before updating an existing account. */
     suspend fun updateAccount(account: Account) {
-        dao.updateAccount(account.copy(transactionPin = EncryptionUtil.encrypt(account.transactionPin)))
+        dao.updateAccount(
+            account.copy(
+                password       = EncryptionUtil.encrypt(account.password),
+                transactionPin = EncryptionUtil.encrypt(account.transactionPin)
+            )
+        )
     }
 
     suspend fun deleteAccount(account: Account) = dao.deleteAccount(account)
@@ -58,8 +77,7 @@ class MeroShareRepository @Inject constructor(
      * Uses raw OkHttp + manual Gson parsing because the server sometimes
      * returns non-strict JSON that Retrofit/GsonConverterFactory rejects.
      *
-     * Returns only companies where [CompanyShare.isFileUploaded] == true,
-     * meaning the result file has been uploaded and can be queried.
+     * Returns only companies where [CompanyShare.isFileUploaded] == true.
      */
     suspend fun getCompanyShares(): Result<List<CompanyShare>> = withContext(Dispatchers.IO) {
         runCatching {
@@ -88,9 +106,9 @@ class MeroShareRepository @Inject constructor(
                 runCatching {
                     val obj = el.asJsonObject
                     CompanyShare(
-                        id            = obj.get("id").asInt,
-                        name          = obj.get("name").asString,
-                        scrip         = obj.get("scrip").asString,
+                        id             = obj.get("id").asInt,
+                        name           = obj.get("name").asString,
+                        scrip          = obj.get("scrip").asString,
                         isFileUploaded = obj.get("isFileUploaded").asBoolean
                     )
                 }.getOrNull()
@@ -103,19 +121,16 @@ class MeroShareRepository @Inject constructor(
     /**
      * POST https://iporesult.cdsc.com.np/result/result/check
      *
-     * Response success message contains allotment info, e.g.:
-     *   "Congratulations! ... quantity : 10 ..."
-     * or failure:
-     *   "Your BOID is not registered..." / "No record found"
+     * Parses "quantity : 10" from a success message for allotted shares.
      */
     suspend fun checkResult(companyShareId: Int, boid: String): ResultStatus =
         withContext(Dispatchers.IO) {
             runCatching {
                 val payload = gson.toJson(
                     ResultCheckRequest(
-                        companyShareId = companyShareId,
-                        boid           = boid,
-                        userCaptcha    = captchaValue,
+                        companyShareId    = companyShareId,
+                        boid              = boid,
+                        userCaptcha       = captchaValue,
                         captchaIdentifier = captchaIdentifier
                     )
                 )
@@ -131,13 +146,11 @@ class MeroShareRepository @Inject constructor(
                 val responseStr = okHttpClient.newCall(request).execute()
                     .use { it.body?.string().orEmpty() }
 
-                val json = gson.fromJson(responseStr.trim(), JsonObject::class.java)
-
-                val success  = json.get("success")?.asBoolean ?: false
-                val message  = json.get("message")?.asString.orEmpty()
+                val json    = gson.fromJson(responseStr.trim(), JsonObject::class.java)
+                val success = json.get("success")?.asBoolean ?: false
+                val message = json.get("message")?.asString.orEmpty()
 
                 if (success && message.contains("allot", ignoreCase = true)) {
-                    // Parse "quantity : 10" from the message
                     val qty = Regex("""quantity\s*:\s*(\d+)""", RegexOption.IGNORE_CASE)
                         .find(message)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                     ResultStatus.Allotted(qty, message)

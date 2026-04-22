@@ -1,6 +1,8 @@
 package com.share_manager.data.db
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.share_manager.data.model.Account
 import kotlinx.coroutines.flow.Flow
 
@@ -29,10 +31,29 @@ interface AccountDao {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Database(
-    entities = [Account::class],
-    version = 1,
-    exportSchema = true   // Set to true so schema is tracked in version control
+    entities  = [Account::class],
+    version   = 2,           // bumped from 1 → 2 for new dp / password columns
+    exportSchema = true
 )
 abstract class MeroShareDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
+
+    companion object {
+        /**
+         * Migration 1 → 2: adds the [Account.dp] and [Account.password] columns
+         * that were introduced when apply / login support was added.
+         *
+         * Both columns default to an empty string so existing rows remain valid.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE accounts ADD COLUMN dp TEXT NOT NULL DEFAULT ''"
+                )
+                database.execSQL(
+                    "ALTER TABLE accounts ADD COLUMN password TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+    }
 }
