@@ -33,7 +33,7 @@ interface AccountDao {
 @Database(
     entities  = [Account::class],
     version   = 2,           // bumped from 1 → 2 for new dp / password columns
-    exportSchema = true
+    exportSchema = false     // set to true and configure room.schemaLocation if you want schema tracking
 )
 abstract class MeroShareDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
