@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,13 +29,17 @@ import com.share_manager.ui.theme.*
 @Composable
 fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
+    var showAddDialog  by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<Account?>(null) }
-    var deleteTarget by remember { mutableStateOf<Account?>(null) }
+    var deleteTarget   by remember { mutableStateOf<Account?>(null) }
 
-    LaunchedEffect(state.successMessage, state.errorMessage) {
-        if (state.successMessage != null || state.errorMessage != null) {
-            kotlinx.coroutines.delay(2000)
+    // Auto-dismiss the snackbar after 2 seconds.
+    // Only fire when a message appears (non-null → null transition would
+    // re-trigger, so we key on the actual string content).
+    val toastMessage = state.successMessage ?: state.errorMessage
+    LaunchedEffect(toastMessage) {
+        if (toastMessage != null) {
+            kotlinx.coroutines.delay(2_000)
             viewModel.clearMessage()
         }
     }
@@ -53,20 +56,27 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SectionHeader(
-                    title = "Accounts",
+                    title    = "Accounts",
                     subtitle = "${state.accounts.size} account${if (state.accounts.size != 1) "s" else ""} saved"
                 )
                 GoldButton(
-                    text = "Add",
+                    text  = "Add",
                     onClick = { showAddDialog = true },
-                    icon = { Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp)) }
+                    icon  = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Snackbar message
-            AnimatedVisibility(visible = state.successMessage != null || state.errorMessage != null) {
+            // ── Toast banner ─────────────────────────────────────────────────
+            // BUG FIX: Spacer was previously INSIDE the AnimatedVisibility
+            // block, causing it to animate in/out with the banner (wrong).
+            // It now lives OUTSIDE, as a separate sibling item.
+            AnimatedVisibility(
+                visible = state.successMessage != null || state.errorMessage != null,
+                enter   = fadeIn() + expandVertically(),
+                exit    = fadeOut() + shrinkVertically()
+            ) {
                 val isError = state.errorMessage != null
                 Row(
                     modifier = Modifier
@@ -78,19 +88,21 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        if (isError) Icons.Default.Error else Icons.Default.CheckCircle,
-                        null,
-                        tint = if (isError) Red400 else Green400,
+                        imageVector = if (isError) Icons.Default.Error else Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint     = if (isError) Red400 else Green400,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        state.errorMessage ?: state.successMessage ?: "",
-                        color = if (isError) Red400 else Green400,
-                        fontSize = 13.sp
+                        text     = state.errorMessage ?: state.successMessage ?: "",
+                        color    = if (isError) Red400 else Green400,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(Modifier.height(12.dp))
             }
+
+            Spacer(Modifier.height(12.dp))
 
             if (state.accounts.isEmpty()) {
                 EmptyAccountsPlaceholder { showAddDialog = true }
@@ -98,8 +110,8 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(state.accounts, key = { it.id }) { account ->
                         AccountCard(
-                            account = account,
-                            onEdit = { editingAccount = account },
+                            account  = account,
+                            onEdit   = { editingAccount = account },
                             onDelete = { deleteTarget = account }
                         )
                     }
@@ -109,27 +121,27 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
         }
     }
 
-    // Add/Edit Dialog
+    // ── Add / Edit dialog ─────────────────────────────────────────────────────
     if (showAddDialog || editingAccount != null) {
         AccountDialog(
-            existing = editingAccount,
+            existing  = editingAccount,
             onDismiss = { showAddDialog = false; editingAccount = null },
-            onSave = { account ->
+            onSave    = { account ->
                 if (editingAccount != null) viewModel.updateAccount(account)
                 else viewModel.saveAccount(account)
-                showAddDialog = false
+                showAddDialog  = false
                 editingAccount = null
             }
         )
     }
 
-    // Delete confirmation
+    // ── Delete confirmation ───────────────────────────────────────────────────
     deleteTarget?.let { acc ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            containerColor = Surface,
-            title = { Text("Delete Account", color = OnSurface) },
-            text = { Text("Remove \"${acc.name}\"? This cannot be undone.", color = Color(0xFF94A3B8)) },
+            containerColor   = Surface,
+            title  = { Text("Delete Account", color = OnSurface) },
+            text   = { Text("Remove \"${acc.name}\"? This cannot be undone.", color = Color(0xFF94A3B8)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteAccount(acc); deleteTarget = null }) {
                     Text("Delete", color = Red400)
@@ -144,13 +156,15 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
     }
 }
 
+// ── Account card ──────────────────────────────────────────────────────────────
+
 @Composable
 private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, Outline, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
+        shape  = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Surface)
     ) {
         Row(
@@ -166,29 +180,31 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    account.name.take(1).uppercase(),
-                    color = Gold400,
+                    text       = account.name.take(1).uppercase(),
+                    color      = Gold400,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize   = 18.sp
                 )
             }
+
             Spacer(Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment    = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        account.name,
+                        text       = account.name,
                         fontWeight = FontWeight.Bold,
-                        color = OnSurface,
-                        fontSize = 15.sp
+                        color      = OnSurface,
+                        fontSize   = 15.sp
                     )
                     if (account.isForeignEmployment) {
                         Text(
-                            "FE",
+                            text     = "FE",
                             fontSize = 9.sp,
-                            color = Gold400,
+                            color    = Gold400,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(Navy600)
@@ -196,16 +212,19 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
                         )
                     }
                 }
+
                 Text(
-                    account.boid,
-                    fontSize = 12.sp,
-                    color = Color(0xFF64748B),
+                    text       = account.boid,
+                    fontSize   = 12.sp,
+                    color      = Color(0xFF64748B),
                     fontFamily = FontFamily.Monospace
                 )
+
                 if (account.crn.isNotEmpty()) {
                     Text("CRN: ${account.crn}", fontSize = 11.sp, color = Color(0xFF475569))
                 }
             }
+
             Row {
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, null, tint = Gold400, modifier = Modifier.size(20.dp))
@@ -218,114 +237,131 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
     }
 }
 
+// ── Empty state ───────────────────────────────────────────────────────────────
+
 @Composable
 private fun EmptyAccountsPlaceholder(onAdd: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                Icons.Default.AccountBox,
-                null,
-                tint = Color(0xFF2D3F5E),
+                imageVector = Icons.Default.AccountBox,
+                contentDescription = null,
+                tint     = Color(0xFF2D3F5E),
                 modifier = Modifier.size(72.dp)
             )
             Spacer(Modifier.height(16.dp))
-            Text("No Accounts Yet", fontWeight = FontWeight.Bold, color = Color(0xFF475569), fontSize = 18.sp)
+            Text(
+                "No Accounts Yet",
+                fontWeight = FontWeight.Bold,
+                color      = Color(0xFF475569),
+                fontSize   = 18.sp
+            )
             Spacer(Modifier.height(8.dp))
-            Text("Add your BOID accounts to check results", color = Color(0xFF334155), fontSize = 13.sp)
+            Text(
+                "Add your BOID accounts to check results",
+                color    = Color(0xFF334155),
+                fontSize = 13.sp
+            )
             Spacer(Modifier.height(24.dp))
             GoldButton(text = "Add First Account", onClick = onAdd)
         }
     }
 }
 
+// ── Add / Edit dialog ─────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountDialog(
-    existing: Account?,
+    existing : Account?,
     onDismiss: () -> Unit,
-    onSave: (Account) -> Unit
+    onSave   : (Account) -> Unit
 ) {
-    var name by remember { mutableStateOf(existing?.name ?: "") }
-    var boid by remember { mutableStateOf(existing?.boid ?: "") }
-    var crn by remember { mutableStateOf(existing?.crn ?: "") }
-    var pin by remember { mutableStateOf(existing?.transactionPin ?: "") }
-    var isFE by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
+    var name       by remember { mutableStateOf(existing?.name           ?: "") }
+    var boid       by remember { mutableStateOf(existing?.boid           ?: "") }
+    var crn        by remember { mutableStateOf(existing?.crn            ?: "") }
+    var pin        by remember { mutableStateOf(existing?.transactionPin ?: "") }
+    var isFE       by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
     var pinVisible by remember { mutableStateOf(false) }
 
     val boidError = boid.isNotEmpty() && boid.length != 16
+    val canSave   = name.isNotBlank() && boid.length == 16
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Navy800,
-        shape = RoundedCornerShape(16.dp),
+        containerColor   = Navy800,
+        shape            = RoundedCornerShape(16.dp),
         title = {
             Text(
-                if (existing != null) "Edit Account" else "Add Account",
-                color = OnSurface,
+                text       = if (existing != null) "Edit Account" else "Add Account",
+                color      = OnSurface,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
                 // Name
                 OutlinedTextField(
-                    value = name,
+                    value         = name,
                     onValueChange = { name = it },
-                    label = { Text("Name / Label") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = dialogFieldColors()
+                    label         = { Text("Name / Label") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth(),
+                    colors        = dialogFieldColors()
                 )
 
-                // BOID
+                // BOID — digits only, max 16
                 OutlinedTextField(
-                    value = boid,
+                    value         = boid,
                     onValueChange = { v -> if (v.length <= 16) boid = v.filter { c -> c.isDigit() } },
-                    label = { Text("BOID (16 digits) *") },
-                    singleLine = true,
-                    isError = boidError,
+                    label         = { Text("BOID (16 digits) *") },
+                    singleLine    = true,
+                    isError       = boidError,
                     supportingText = {
                         if (boidError) Text("BOID must be exactly 16 digits", color = Red400)
-                        else Text("${boid.length}/16", color = Color(0xFF64748B))
+                        else           Text("${boid.length}/16", color = Color(0xFF64748B))
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = dialogFieldColors()
+                    textStyle       = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    modifier        = Modifier.fillMaxWidth(),
+                    colors          = dialogFieldColors()
                 )
 
                 // CRN (optional)
                 OutlinedTextField(
-                    value = crn,
+                    value         = crn,
                     onValueChange = { crn = it },
-                    label = { Text("CRN (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = dialogFieldColors()
+                    label         = { Text("CRN (optional)") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth(),
+                    colors        = dialogFieldColors()
                 )
 
-                // Transaction PIN (optional, encrypted)
+                // Transaction PIN (optional, stored encrypted)
                 OutlinedTextField(
-                    value = pin,
-                    onValueChange = { pin = it },
-                    label = { Text("Transaction PIN (optional)") },
-                    singleLine = true,
-                    visualTransformation = if (pinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    value               = pin,
+                    onValueChange       = { pin = it },
+                    label               = { Text("Transaction PIN (optional)") },
+                    singleLine          = true,
+                    visualTransformation = if (pinVisible) VisualTransformation.None
+                                          else             PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { pinVisible = !pinVisible }) {
                             Icon(
-                                if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                null,
+                                imageVector = if (pinVisible) Icons.Default.VisibilityOff
+                                              else             Icons.Default.Visibility,
+                                contentDescription = if (pinVisible) "Hide PIN" else "Show PIN",
                                 tint = Color(0xFF64748B)
                             )
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = dialogFieldColors()
+                    modifier        = Modifier.fillMaxWidth(),
+                    colors          = dialogFieldColors()
                 )
 
-                // Foreign Employment Toggle
+                // Foreign Employment toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -333,16 +369,25 @@ private fun AccountDialog(
                         .background(Navy700)
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Foreign Employment", color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        Text("For FE-specific IPOs only", color = Color(0xFF64748B), fontSize = 11.sp)
+                        Text(
+                            "Foreign Employment",
+                            color      = OnSurface,
+                            fontSize   = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "For FE-specific IPOs only",
+                            color    = Color(0xFF64748B),
+                            fontSize = 11.sp
+                        )
                     }
                     Switch(
-                        checked = isFE,
+                        checked         = isFE,
                         onCheckedChange = { isFE = it },
-                        colors = SwitchDefaults.colors(
+                        colors          = SwitchDefaults.colors(
                             checkedThumbColor = Navy900,
                             checkedTrackColor = Gold400
                         )
@@ -352,15 +397,18 @@ private fun AccountDialog(
         },
         confirmButton = {
             GoldButton(
-                text = if (existing != null) "Update" else "Save",
-                enabled = name.isNotBlank() && boid.length == 16,
+                text    = if (existing != null) "Update" else "Save",
+                enabled = canSave,
                 onClick = {
+                    // BUG FIX: Use a fresh Account() with default id=0 for new accounts
+                    // rather than a private extension function that shadows the class name.
+                    val base = existing ?: Account()
                     onSave(
-                        (existing ?: Account()).copy(
-                            name = name.trim(),
-                            boid = boid.trim(),
-                            crn = crn.trim(),
-                            transactionPin = pin,
+                        base.copy(
+                            name                = name.trim(),
+                            boid                = boid.trim(),
+                            crn                 = crn.trim(),
+                            transactionPin      = pin,
                             isForeignEmployment = isFE
                         )
                     )
@@ -377,17 +425,14 @@ private fun AccountDialog(
 
 @Composable
 private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Gold400,
-    unfocusedBorderColor = Outline,
-    focusedLabelColor = Gold400,
-    unfocusedLabelColor = Color(0xFF64748B),
-    focusedTextColor = OnSurface,
-    unfocusedTextColor = OnSurface,
-    cursorColor = Gold400,
-    focusedContainerColor = Color.Transparent,
+    focusedBorderColor    = Gold400,
+    unfocusedBorderColor  = Outline,
+    focusedLabelColor     = Gold400,
+    unfocusedLabelColor   = Color(0xFF64748B),
+    focusedTextColor      = OnSurface,
+    unfocusedTextColor    = OnSurface,
+    cursorColor           = Gold400,
+    focusedContainerColor   = Color.Transparent,
     unfocusedContainerColor = Color.Transparent,
-    disabledContainerColor = Color.Transparent
+    disabledContainerColor  = Color.Transparent
 )
-
-// Extension to allow copy on base Account with id=0 default
-private fun Account() = Account(id = 0, name = "", boid = "")

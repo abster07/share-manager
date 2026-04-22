@@ -6,7 +6,6 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,10 +30,18 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showCompanyPicker by remember { mutableStateOf(false) }
 
+    // ── Summary stats ─────────────────────────────────────────────────────────
     val allotted    = state.accountResults.count { it.status is ResultStatus.Allotted }
     val notAllotted = state.accountResults.count { it.status is ResultStatus.NotAllotted }
     val errors      = state.accountResults.count { it.status is ResultStatus.Error }
-    val totalQty    = state.accountResults.sumOf { (it.status as? ResultStatus.Allotted)?.quantity ?: 0 }
+
+    // BUG FIX: previous code did filterIsInstance<AccountResult>() on a
+    // List<AccountResult> — every element already is one, so the cast was
+    // always a no-op but the sumOf still worked by luck. Removed the
+    // superfluous filterIsInstance call.
+    val totalQty = state.accountResults.sumOf { r ->
+        (r.status as? ResultStatus.Allotted)?.quantity ?: 0
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -45,12 +51,12 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
     ) {
         item {
             SectionHeader(
-                title = "IPO Result Check",
+                title    = "IPO Result Check",
                 subtitle = "Bulk check across all accounts"
             )
         }
 
-        // Error banner
+        // ── Error banner ──────────────────────────────────────────────────────
         if (state.errorMessage != null) {
             item {
                 Row(
@@ -59,56 +65,70 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFF3B1F1F))
                         .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(Icons.Default.Error, null, tint = Red400, modifier = Modifier.size(18.dp))
-                    Text(state.errorMessage!!, color = Red400, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    IconButton(onClick = viewModel::clearError, modifier = Modifier.size(24.dp)) {
+                    Text(
+                        state.errorMessage!!,
+                        color    = Red400,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick  = viewModel::clearError,
+                        modifier = Modifier.size(24.dp)
+                    ) {
                         Icon(Icons.Default.Close, null, tint = Red400)
                     }
                 }
             }
         }
 
-        // Company selector card
+        // ── Company selector ──────────────────────────────────────────────────
         item {
             CompanySelectorCard(
-                selected = state.selectedCompany,
-                isLoading = state.isLoadingCompanies,
+                selected   = state.selectedCompany,
+                isLoading  = state.isLoadingCompanies,
                 onPickClick = { showCompanyPicker = true },
-                onRefresh = viewModel::loadCompanies
+                onRefresh  = viewModel::loadCompanies
             )
         }
 
-        // Action button
+        // ── Action button / progress ──────────────────────────────────────────
         item {
             AnimatedContent(
-                targetState = state.isChecking,
+                targetState  = state.isChecking,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "action_button"
+                label        = "action_button"
             ) { checking ->
                 if (checking) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         LinearProgressIndicator(
                             progress = { state.progress },
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                            color = Gold400,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(4.dp)),
+                            color      = Gold400,
                             trackColor = Navy700
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment     = Alignment.CenterVertically
                         ) {
+                            // BUG FIX: use checkedCount directly instead of
+                            // (progress * accounts.size).toInt() which could
+                            // round incorrectly on the last step.
                             Text(
-                                "Checking ${(state.progress * state.accounts.size).toInt()} / ${state.accounts.size}…",
-                                fontSize = 12.sp, color = Color(0xFF94A3B8)
+                                "Checking ${state.checkedCount} / ${state.accounts.size}…",
+                                fontSize = 12.sp,
+                                color    = Color(0xFF94A3B8)
                             )
                             OutlinedButton(
                                 onClick = viewModel::cancelCheck,
-                                border = BorderStroke(1.dp, Red400),
-                                shape = RoundedCornerShape(8.dp)
+                                border  = BorderStroke(1.dp, Red400),
+                                shape   = RoundedCornerShape(8.dp)
                             ) {
                                 Text("Cancel", color = Red400, fontSize = 12.sp)
                             }
@@ -116,17 +136,17 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                     }
                 } else {
                     GoldButton(
-                        text = if (state.accountResults.isEmpty()) "Check All Results" else "Re-check All",
+                        text    = if (state.accountResults.isEmpty()) "Check All Results" else "Re-check All",
                         onClick = viewModel::checkBulkResults,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state.selectedCompany != null && state.accounts.isNotEmpty(),
-                        icon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp)) }
+                        icon    = { Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp)) }
                     )
                 }
             }
         }
 
-        // No accounts warning
+        // ── No accounts warning ───────────────────────────────────────────────
         if (state.accounts.isEmpty()) {
             item {
                 Row(
@@ -136,21 +156,28 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                         .background(Navy700)
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Info, null, tint = Amber400, modifier = Modifier.size(18.dp))
-                    Text("Add accounts first to check results", color = Color(0xFF94A3B8), fontSize = 13.sp)
+                    Text(
+                        "Add accounts first to check results",
+                        color    = Color(0xFF94A3B8),
+                        fontSize = 13.sp
+                    )
                 }
             }
         }
 
-        // Stats row
+        // ── Stats row (shown after first results) ─────────────────────────────
         if (state.accountResults.isNotEmpty()) {
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatCard("Allotted", allotted.toString(), Green400, Modifier.weight(1f))
-                    StatCard("Not Allotted", notAllotted.toString(), Red400, Modifier.weight(1f))
-                    StatCard("Errors", errors.toString(), Amber400, Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard("Allotted",     allotted.toString(),    Green400, Modifier.weight(1f))
+                    StatCard("Not Allotted", notAllotted.toString(), Red400,   Modifier.weight(1f))
+                    StatCard("Errors",       errors.toString(),      Amber400, Modifier.weight(1f))
                 }
             }
 
@@ -163,18 +190,29 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                             .background(Color(0xFF064E3B))
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment     = Alignment.CenterVertically
                     ) {
-                        Text("Total Allotted Shares", color = Green400, fontWeight = FontWeight.SemiBold)
-                        Text("$totalQty units", color = Green400, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                        Text(
+                            "Total Allotted Shares",
+                            color      = Green400,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "$totalQty units",
+                            color      = Green400,
+                            fontWeight = FontWeight.Black,
+                            fontSize   = 20.sp
+                        )
                     }
                 }
             }
 
             item {
                 Text(
-                    "Results  (${state.accountResults.size})",
-                    fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8), fontSize = 13.sp
+                    "Results (${state.accountResults.size})",
+                    fontWeight = FontWeight.Bold,
+                    color      = Color(0xFF94A3B8),
+                    fontSize   = 13.sp
                 )
             }
 
@@ -182,27 +220,16 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
                 AccountResultCard(result)
             }
 
-            item { Spacer(Modifier.height(8.dp)) }
+            item { Spacer(Modifier.height(80.dp)) }
         }
-
-        // ── Debug Log Panel ───────────────────────────────────────────────────
-        item {
-            DebugLogPanel(
-                log = state.debugLog,
-                expanded = state.showDebugLog,
-                onToggle = viewModel::toggleDebugLog,
-                onClear = viewModel::clearDebugLog
-            )
-        }
-
-        item { Spacer(Modifier.height(80.dp)) }
     }
 
+    // ── Company bottom-sheet picker ───────────────────────────────────────────
     if (showCompanyPicker) {
         CompanyPickerSheet(
             companies = state.companies,
             isLoading = state.isLoadingCompanies,
-            onSelect = { company ->
+            onSelect  = { company ->
                 viewModel.selectCompany(company)
                 showCompanyPicker = false
             },
@@ -211,143 +238,20 @@ fun ResultsScreen(viewModel: ResultsViewModel = hiltViewModel()) {
     }
 }
 
-// ── Debug Log Panel ───────────────────────────────────────────────────────────
-
-@Composable
-private fun DebugLogPanel(
-    log: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onClear: () -> Unit
-) {
-    val scrollState = rememberScrollState()
-
-    // Auto-scroll to bottom when log updates and panel is open
-    LaunchedEffect(log, expanded) {
-        if (expanded) scrollState.animateScrollTo(scrollState.maxValue)
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117)),
-        border = BorderStroke(1.dp, Color(0xFF30363D))
-    ) {
-        Column {
-            // Header row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onToggle)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Terminal,
-                    contentDescription = null,
-                    tint = Color(0xFF58A6FF),
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    "Network Debug Log",
-                    color = Color(0xFF58A6FF),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(1f)
-                )
-                if (log.isNotEmpty()) {
-                    Text(
-                        "${log.lines().size} lines",
-                        color = Color(0xFF8B949E),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                if (expanded && log.isNotEmpty()) {
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp))
-                    }
-                }
-                Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    null,
-                    tint = Color(0xFF8B949E),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Log body
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                HorizontalDivider(color = Color(0xFF21262D))
-
-                if (log.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "No log yet. Tap refresh or check results.",
-                            color = Color(0xFF8B949E),
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 280.dp)
-                            .verticalScroll(scrollState)
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                    ) {
-                        log.lines().forEach { line ->
-                            val color = when {
-                                line.contains("ERROR") || line.contains("FAILURE") -> Color(0xFFFF7B72)
-                                line.contains("HTTP 2") -> Color(0xFF3FB950)
-                                line.contains("HTTP") -> Color(0xFFFF7B72)
-                                line.contains("BODY") || line.contains("body") -> Color(0xFFD2A8FF)
-                                line.contains("size =") || line.contains("parsed=") -> Color(0xFFFFA657)
-                                line.startsWith("[") -> Color(0xFF8B949E)
-                                else -> Color(0xFFE6EDF3)
-                            }
-                            Text(
-                                text = line,
-                                color = color,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── Company Selector Card ─────────────────────────────────────────────────────
+// ── Company selector card ─────────────────────────────────────────────────────
 
 @Composable
 private fun CompanySelectorCard(
-    selected: CompanyShare?,
-    isLoading: Boolean,
+    selected   : CompanyShare?,
+    isLoading  : Boolean,
     onPickClick: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh  : () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        border = BorderStroke(1.dp, if (selected != null) Gold400.copy(0.5f) else Outline)
+        shape    = RoundedCornerShape(12.dp),
+        colors   = CardDefaults.cardColors(containerColor = Surface),
+        border   = BorderStroke(1.dp, if (selected != null) Gold400.copy(0.5f) else Outline)
     ) {
         Row(
             modifier = Modifier
@@ -357,28 +261,42 @@ private fun CompanySelectorCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.Business,
-                null,
-                tint = if (selected != null) Gold400 else Color(0xFF475569),
+                imageVector = Icons.Default.Business,
+                contentDescription = null,
+                tint     = if (selected != null) Gold400 else Color(0xFF475569),
                 modifier = Modifier.size(24.dp)
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    if (selected != null) "IPO Company" else "Select IPO Company",
-                    fontSize = 11.sp, color = Color(0xFF64748B)
+                    text     = if (selected != null) "IPO Company" else "Select IPO Company",
+                    fontSize = 11.sp,
+                    color    = Color(0xFF64748B)
                 )
                 if (selected != null) {
-                    Text(selected.name, color = OnSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        text       = selected.name,
+                        color      = OnSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize   = 14.sp
+                    )
                     Text(selected.scrip, color = Gold400, fontSize = 12.sp)
                 }
             }
             if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Gold400, strokeWidth = 2.dp)
+                CircularProgressIndicator(
+                    modifier    = Modifier.size(20.dp),
+                    color       = Gold400,
+                    strokeWidth = 2.dp
+                )
             } else {
                 Row {
                     IconButton(onClick = onRefresh, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Refresh, null, tint = Color(0xFF64748B), modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Refresh, null,
+                            tint     = Color(0xFF64748B),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                     Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF475569))
                 }
@@ -387,24 +305,27 @@ private fun CompanySelectorCard(
     }
 }
 
-// ── Company Picker Sheet ──────────────────────────────────────────────────────
+// ── Company picker bottom sheet ───────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompanyPickerSheet(
     companies: List<CompanyShare>,
     isLoading: Boolean,
-    onSelect: (CompanyShare) -> Unit,
+    onSelect : (CompanyShare) -> Unit,
     onDismiss: () -> Unit
 ) {
     var search by remember { mutableStateOf("") }
-    val filtered = companies.filter {
-        it.name.contains(search, ignoreCase = true) || it.scrip.contains(search, ignoreCase = true)
+    val filtered = remember(search, companies) {
+        companies.filter {
+            it.name.contains(search, ignoreCase = true) ||
+                    it.scrip.contains(search, ignoreCase = true)
+        }
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Navy800,
+        containerColor   = Navy800,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -416,46 +337,65 @@ private fun CompanyPickerSheet(
         }
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text("Select IPO Company", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 18.sp)
+            Text(
+                "Select IPO Company",
+                fontWeight = FontWeight.Bold,
+                color      = OnSurface,
+                fontSize   = 18.sp
+            )
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = search,
+                value         = search,
                 onValueChange = { search = it },
-                placeholder = { Text("Search company or scrip…", color = Color(0xFF475569)) },
-                leadingIcon = { Icon(Icons.Default.Search, null, tint = Color(0xFF64748B)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Gold400,
-                    unfocusedBorderColor = Outline,
-                    focusedTextColor = OnSurface,
-                    unfocusedTextColor = OnSurface,
-                    cursorColor = Gold400,
-                    focusedContainerColor = Color.Transparent,
+                placeholder   = { Text("Search company or scrip…", color = Color(0xFF475569)) },
+                leadingIcon   = { Icon(Icons.Default.Search, null, tint = Color(0xFF64748B)) },
+                modifier      = Modifier.fillMaxWidth(),
+                singleLine    = true,
+                colors        = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor      = Gold400,
+                    unfocusedBorderColor    = Outline,
+                    focusedTextColor        = OnSurface,
+                    unfocusedTextColor      = OnSurface,
+                    cursorColor             = Gold400,
+                    focusedContainerColor   = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent
+                    disabledContainerColor  = Color.Transparent
                 )
             )
+
             Spacer(Modifier.height(8.dp))
 
             if (isLoading) {
-                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Gold400)
                 }
-            } else if (companies.isEmpty()) {
-                // Empty state — gives the user a visual cue that fetching failed/returned nothing
-                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.CloudOff, null, tint = Color(0xFF475569), modifier = Modifier.size(36.dp))
-                        Text("No companies loaded", color = Color(0xFF64748B), fontSize = 13.sp)
-                        Text("Check the Debug Log for details", color = Color(0xFF475569), fontSize = 12.sp)
-                    }
+            } else if (filtered.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (search.isBlank()) "No companies available" else "No results for \"$search\"",
+                        color    = Color(0xFF64748B),
+                        fontSize = 14.sp
+                    )
                 }
             } else {
+                // BUG FIX: heightIn(max = 400.dp) could be too small on short
+                // screens. Using fillMaxHeight(0.6f) respects the actual screen.
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(filtered, key = { it.id }) { company ->
                         Row(
@@ -467,7 +407,12 @@ private fun CompanyPickerSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(company.name, color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    company.name,
+                                    color      = OnSurface,
+                                    fontSize   = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
                                 Text(company.scrip, color = Gold400, fontSize = 12.sp)
                             }
                             Icon(Icons.Default.ChevronRight, null, tint = Outline)
