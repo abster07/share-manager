@@ -57,9 +57,9 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                     subtitle = "${state.accounts.size} account${if (state.accounts.size != 1) "s" else ""} saved"
                 )
                 GoldButton(
-                    text    = "Add",
+                    text  = "Add",
                     onClick = { showAddDialog = true },
-                    icon    = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    icon  = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
 
@@ -77,7 +77,7 @@ fun AccountsScreen(viewModel: AccountsViewModel = hiltViewModel()) {
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isError) Color(0xFF3B1F1F) else Color(0xFF064E3B))
                         .padding(12.dp),
-                    verticalAlignment     = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
@@ -181,7 +181,7 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
-                    verticalAlignment     = Alignment.CenterVertically,
+                    verticalAlignment    = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
@@ -204,26 +204,20 @@ private fun AccountCard(account: Account, onEdit: () -> Unit, onDelete: () -> Un
                 }
 
                 Text(
-                    text       = account.boid,
+                    text       = "BOID: ${account.boid}",
                     fontSize   = 12.sp,
                     color      = Color(0xFF64748B),
                     fontFamily = FontFamily.Monospace
                 )
 
-                if (account.dp.isNotEmpty()) {
-                    Text(
-                        text     = "DP: ${account.dp}",
-                        fontSize = 11.sp,
-                        color    = Color(0xFF475569)
-                    )
-                }
+                Text(
+                    text       = "DP: ${account.dp}  •  User: ${account.username}",
+                    fontSize   = 11.sp,
+                    color      = Color(0xFF475569)
+                )
 
                 if (account.crn.isNotEmpty()) {
-                    Text(
-                        text     = "CRN: ${account.crn}",
-                        fontSize = 11.sp,
-                        color    = Color(0xFF475569)
-                    )
+                    Text("CRN: ${account.crn}", fontSize = 11.sp, color = Color(0xFF475569))
                 }
             }
 
@@ -252,18 +246,9 @@ private fun EmptyAccountsPlaceholder(onAdd: () -> Unit) {
                 modifier = Modifier.size(72.dp)
             )
             Spacer(Modifier.height(16.dp))
-            Text(
-                "No Accounts Yet",
-                fontWeight = FontWeight.Bold,
-                color      = Color(0xFF475569),
-                fontSize   = 18.sp
-            )
+            Text("No Accounts Yet", fontWeight = FontWeight.Bold, color = Color(0xFF475569), fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Add your BOID accounts to check results",
-                color    = Color(0xFF334155),
-                fontSize = 13.sp
-            )
+            Text("Add your BOID accounts to check results", color = Color(0xFF334155), fontSize = 13.sp)
             Spacer(Modifier.height(24.dp))
             GoldButton(text = "Add First Account", onClick = onAdd)
         }
@@ -279,18 +264,20 @@ private fun AccountDialog(
     onDismiss: () -> Unit,
     onSave   : (Account) -> Unit
 ) {
-    var name            by remember { mutableStateOf(existing?.name              ?: "") }
-    var boid            by remember { mutableStateOf(existing?.boid              ?: "") }
-    var dp              by remember { mutableStateOf(existing?.dp                ?: "") }
-    var password        by remember { mutableStateOf(existing?.password          ?: "") }
-    var crn             by remember { mutableStateOf(existing?.crn               ?: "") }
-    var pin             by remember { mutableStateOf(existing?.transactionPin    ?: "") }
-    var isFE            by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
-    var pinVisible      by remember { mutableStateOf(false) }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var name       by remember { mutableStateOf(existing?.name           ?: "") }
+    var dp         by remember { mutableStateOf(existing?.dp             ?: "") }
+    var username   by remember { mutableStateOf(existing?.username       ?: "") }
+    var password   by remember { mutableStateOf("") } // never pre-fill password
+    var boid       by remember { mutableStateOf(existing?.boid           ?: "") }
+    var crn        by remember { mutableStateOf(existing?.crn            ?: "") }
+    var pin        by remember { mutableStateOf("") } // never pre-fill PIN
+    var isFE       by remember { mutableStateOf(existing?.isForeignEmployment ?: false) }
+    var pinVisible     by remember { mutableStateOf(false) }
+    var passVisible    by remember { mutableStateOf(false) }
 
     val boidError = boid.isNotEmpty() && boid.length != 16
-    val canSave   = name.isNotBlank() && boid.length == 16
+    val canSave   = name.isNotBlank() && dp.isNotBlank() && username.isNotBlank() &&
+                    boid.length == 16
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -309,7 +296,7 @@ private fun AccountDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
 
-                // Name / Label
+                // Name / label
                 OutlinedTextField(
                     value         = name,
                     onValueChange = { name = it },
@@ -319,7 +306,52 @@ private fun AccountDialog(
                     colors        = dialogFieldColors()
                 )
 
-                // BOID — digits only, max 16
+                // DP code — numeric, e.g. 13200
+                OutlinedTextField(
+                    value         = dp,
+                    onValueChange = { v -> dp = v.filter { it.isDigit() }.take(6) },
+                    label         = { Text("DP / Broker Code (e.g. 13200)") },
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle     = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    modifier      = Modifier.fillMaxWidth(),
+                    colors        = dialogFieldColors()
+                )
+
+                // Username — numeric client/BOID used for MeroShare login
+                OutlinedTextField(
+                    value         = username,
+                    onValueChange = { v -> username = v.filter { it.isDigit() } },
+                    label         = { Text("MeroShare Username (numeric)") },
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle     = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    modifier      = Modifier.fillMaxWidth(),
+                    colors        = dialogFieldColors()
+                )
+
+                // Password
+                OutlinedTextField(
+                    value               = password,
+                    onValueChange       = { password = it },
+                    label               = { Text(if (existing != null) "Password (leave blank to keep)" else "Password") },
+                    singleLine          = true,
+                    visualTransformation = if (passVisible) VisualTransformation.None
+                                          else             PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passVisible = !passVisible }) {
+                            Icon(
+                                imageVector = if (passVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = Color(0xFF64748B)
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = dialogFieldColors()
+                )
+
+                // BOID — 16 digits, used for result checks
                 OutlinedTextField(
                     value         = boid,
                     onValueChange = { v -> if (v.length <= 16) boid = v.filter { c -> c.isDigit() } },
@@ -336,40 +368,6 @@ private fun AccountDialog(
                     colors          = dialogFieldColors()
                 )
 
-                // DP / Broker code
-                OutlinedTextField(
-                    value         = dp,
-                    onValueChange = { dp = it.filter { c -> c.isDigit() } },
-                    label         = { Text("DP Code (broker code)") },
-                    placeholder   = { Text("e.g. 13200", color = Color(0xFF475569)) },
-                    singleLine    = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier      = Modifier.fillMaxWidth(),
-                    colors        = dialogFieldColors()
-                )
-
-                // MeroShare password (encrypted at rest)
-                OutlinedTextField(
-                    value               = password,
-                    onValueChange       = { password = it },
-                    label               = { Text("MeroShare Password") },
-                    singleLine          = true,
-                    visualTransformation = if (passwordVisible) VisualTransformation.None
-                                          else                  PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff
-                                              else                  Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                                tint = Color(0xFF64748B)
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors   = dialogFieldColors()
-                )
-
                 // CRN (optional)
                 OutlinedTextField(
                     value         = crn,
@@ -380,20 +378,19 @@ private fun AccountDialog(
                     colors        = dialogFieldColors()
                 )
 
-                // Transaction PIN (optional, stored encrypted)
+                // Transaction PIN (optional)
                 OutlinedTextField(
                     value               = pin,
                     onValueChange       = { pin = it },
-                    label               = { Text("Transaction PIN (optional)") },
+                    label               = { Text(if (existing != null) "Transaction PIN (leave blank to keep)" else "Transaction PIN (optional)") },
                     singleLine          = true,
                     visualTransformation = if (pinVisible) VisualTransformation.None
                                           else             PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { pinVisible = !pinVisible }) {
                             Icon(
-                                imageVector = if (pinVisible) Icons.Default.VisibilityOff
-                                              else             Icons.Default.Visibility,
-                                contentDescription = if (pinVisible) "Hide PIN" else "Show PIN",
+                                imageVector = if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null,
                                 tint = Color(0xFF64748B)
                             )
                         }
@@ -414,17 +411,8 @@ private fun AccountDialog(
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            "Foreign Employment",
-                            color      = OnSurface,
-                            fontSize   = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "For FE-specific IPOs only",
-                            color    = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
+                        Text("Foreign Employment", color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("For FE-specific IPOs only", color = Color(0xFF64748B), fontSize = 11.sp)
                     }
                     Switch(
                         checked         = isFE,
@@ -446,11 +434,13 @@ private fun AccountDialog(
                     onSave(
                         base.copy(
                             name                = name.trim(),
-                            boid                = boid.trim(),
                             dp                  = dp.trim(),
-                            password            = password,
+                            username            = username.trim(),
+                            // Only update password/PIN if user typed something new
+                            password            = if (password.isNotBlank()) password else (existing?.password ?: ""),
+                            boid                = boid.trim(),
                             crn                 = crn.trim(),
-                            transactionPin      = pin,
+                            transactionPin      = if (pin.isNotBlank()) pin else (existing?.transactionPin ?: ""),
                             isForeignEmployment = isFE
                         )
                     )
@@ -467,13 +457,13 @@ private fun AccountDialog(
 
 @Composable
 private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor      = Gold400,
-    unfocusedBorderColor    = Outline,
-    focusedLabelColor       = Gold400,
-    unfocusedLabelColor     = Color(0xFF64748B),
-    focusedTextColor        = OnSurface,
-    unfocusedTextColor      = OnSurface,
-    cursorColor             = Gold400,
+    focusedBorderColor    = Gold400,
+    unfocusedBorderColor  = Outline,
+    focusedLabelColor     = Gold400,
+    unfocusedLabelColor   = Color(0xFF64748B),
+    focusedTextColor      = OnSurface,
+    unfocusedTextColor    = OnSurface,
+    cursorColor           = Gold400,
     focusedContainerColor   = Color.Transparent,
     unfocusedContainerColor = Color.Transparent,
     disabledContainerColor  = Color.Transparent

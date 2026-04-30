@@ -2,6 +2,7 @@ package com.share_manager.data.repository
 
 import com.share_manager.data.model.*
 import com.share_manager.network.ApiService
+import com.share_manager.util.EncryptionUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -10,15 +11,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Mirrors the Python script's UserSession class.
+ * Mirrors the Python MeroShare class / UserSession lifecycle:
  *
- * Lifecycle per account:
- *   1. login(account)              → returns Bearer token
- *   2. fetchBranchInfo(token, dp)  → returns bank/branch details
- *   3. getOpenIssues / canApply / applyForAccount / generateReports
- *
- * Each public function is self-contained — it logs in, does the work, and
- * returns a clean result so the ViewModel never has to manage raw tokens.
+ *   1. login(account)           → POST /auth/ → Authorization header token
+ *   2. getBranchInfo(token)     → GET /capital/ + GET /bank/{id}/branchList
+ *   3. getOpenIssues(token)     → POST /companyShare/currentIssue
+ *   4. canApply(token, ...)     → GET /active/{cid}?demat=...
+ *   5. applyForAccount(...)     → POST /applicantForm/
+ *   6. generateReports(...)     → POST /applicantForm/active/search/ + detail
  */
 @Singleton
 class MeroShareUserRepository @Inject constructor(
@@ -29,11 +29,13 @@ class MeroShareUserRepository @Inject constructor(
     // ── Auth ──────────────────────────────────────────────────────────────────
 
     /**
-     * Logs in and returns the Bearer token.
-     * Mirrors: UserSession.create_session()
+     * Logs in and returns the Bearer token from the Authorization response header.
+     * Mirrors: Python __loginRequest__()
      *
-     * The server returns the token in the **Authorization** response header,
-     * not in the body.
+     * Account fields used:
+     *   account.dp       → broker/DP code e.g. "13200"  → converted to clientId
+     *   account.username → numeric BOID used as MeroShare login username
+     *   account.password → decrypted password (EncryptionUtil.decrypt before call)
      */
     suspend fun login(account: Account): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
@@ -43,27 +45,23 @@ class MeroShareUserRepository @Inject constructor(
             val response = api.login(
                 AuthRequest(
                     clientId = clientId,
-                    username = account.username,   // username == boid
-                    password = account.password
+                    username = account.username,
+                    password = EncryptionUtil.decrypt(account.password)
                 )
             )
-
             if (!response.isSuccessful) {
-                throw Exception("Login failed for ${account.username}: HTTP ${response.code()}")
+                throw Exception("Login failed for ${account.name}: HTTP ${response.code()}")
             }
-
             response.headers()["Authorization"]
-                ?: throw Exception("No Authorization header in login response for ${account.username}")
+                ?: throw Exception("No Authorization header in login response for ${account.name}")
         }
     }
 
     // ── Bank / Branch ─────────────────────────────────────────────────────────
 
     /**
-     * Fetches the first bank linked to the account, then retrieves its
-     * first branch/account details.
-     *
-     * Mirrors: UserSession.set_branch_info() + UserSession.bank_info()
+     * Fetches the first available bank and its branch info for the logged-in user.
+     * Mirrors: Python getBanks() + getBranchInfo()
      */
     suspend fun fetchBranchInfo(token: String, accountName: String): Result<BranchInfo> =
         withContext(Dispatchers.IO) {
@@ -86,8 +84,8 @@ class MeroShareUserRepository @Inject constructor(
     // ── Open Issues ───────────────────────────────────────────────────────────
 
     /**
-     * Mirrors: UserSession.open_issues()
-     * Returns all currently applicable issues for this account's token.
+     * Returns all currently open/applicable share issues.
+     * Mirrors: Python getCurrentIssues()
      */
     suspend fun getOpenIssues(token: String): Result<List<IssueJson>> =
         withContext(Dispatchers.IO) {
@@ -103,23 +101,26 @@ class MeroShareUserRepository @Inject constructor(
     // ── Can Apply ─────────────────────────────────────────────────────────────
 
     /**
-     * Mirrors: UserSession.can_apply()
-     * demat = "130" + dp + username  (Python: f"130{self.account.dp}{self.account.username}")
+     * Checks whether this account can apply for the given companyShareId.
+     * Mirrors: Python canApply() — demat = "130" + dp + username
      */
     suspend fun canApply(token: String, account: Account, companyShareId: Int): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
                 val demat = buildDemat(account)
                 val response = api.canApply(companyShareId, demat, token)
-                response.isSuccessful && response.body()?.get("message") == "Customer can apply."
+                response.isSuccessful &&
+                    response.body()?.get("message") == "Customer can apply."
             }.getOrDefault(false)
         }
 
     // ── Apply ─────────────────────────────────────────────────────────────────
 
     /**
-     * Full apply flow for one account — mirrors the Python __main__ apply block.
-     * Steps: login → branch info → verify unapplied issue → can-apply → POST apply
+     * Full apply flow for one account:
+     *   login → branch info → find open issue → can-apply check → POST apply
+     *
+     * Mirrors the Python __main__ apply block.
      */
     suspend fun applyForAccount(
         account: Account,
@@ -150,17 +151,17 @@ class MeroShareUserRepository @Inject constructor(
 
             // 5. Submit application
             val payload = ApplyRequest(
-                demat           = buildDemat(account),
-                boid            = account.username,
-                accountNumber   = branch.accountNumber,
-                customerId      = branch.id,
+                demat          = buildDemat(account),
+                boid           = account.boid,          // 16-digit BOID
+                accountNumber  = branch.accountNumber,
+                customerId     = branch.id,
                 accountBranchId = branch.accountBranchId,
-                accountTypeId   = branch.accountTypeId,
-                appliedKitta    = numberOfShares.toString(),
-                crnNumber       = account.crn,
-                transactionPIN  = account.transactionPin,
-                companyShareId  = companyShareId.toString(),
-                bankId          = branch.bankId
+                accountTypeId  = branch.accountTypeId,
+                appliedKitta   = numberOfShares.toString(),
+                crnNumber      = account.crn,
+                transactionPIN = EncryptionUtil.decrypt(account.transactionPin),
+                companyShareId = companyShareId.toString(),
+                bankId         = branch.bankId
             )
 
             val r = api.applyForShare(payload, token)
@@ -177,25 +178,23 @@ class MeroShareUserRepository @Inject constructor(
     // ── Reports ───────────────────────────────────────────────────────────────
 
     /**
-     * Mirrors: UserSession.generate_reports() + with_allotment_status()
-     * Fetches last 2 months of applications and enriches with allotment status.
+     * Fetches the last 2 months of applications and enriches with allotment detail.
+     * Mirrors: Python getApplicationReport() + getFormDetails()
      */
     suspend fun generateReports(account: Account): Result<List<ReportItem>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val token = login(account).getOrThrow()
 
-                val sdf        = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val today      = sdf.format(Date())
-                val cal        = Calendar.getInstance().apply { add(Calendar.MONTH, -2) }
-                val twoMonthsAgo = sdf.format(cal.time)
+                val sdf   = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val today = sdf.format(Date())
+                val cal   = Calendar.getInstance().apply { add(Calendar.MONTH, -2) }
+                val from  = sdf.format(cal.time)
 
                 val request = ReportRequest(
                     filterDateParams = listOf(
-                        FilterDateParam(
-                            key   = "appliedDate",
-                            value = "BETWEEN '$twoMonthsAgo' AND '$today'"
-                        )
+                        FilterDateParam(key = "appliedDate", value = ""),
+                        FilterDateParam(key = "appliedDate", value = "")
                     )
                 )
 
@@ -215,7 +214,7 @@ class MeroShareUserRepository @Inject constructor(
                         statusName      = issue.statusName
                     )
 
-                    // Enrich with allotment detail when the application was processed
+                    // Enrich with allotment detail where applicable
                     if (issue.statusName in listOf("TRANSACTION_SUCCESS", "APPROVED")) {
                         runCatching {
                             val detail = api.getAllotmentDetail(item.applicantFormId, token)
