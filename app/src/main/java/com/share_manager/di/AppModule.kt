@@ -5,24 +5,21 @@ import androidx.room.Room
 import com.share_manager.BuildConfig
 import com.share_manager.data.db.AccountDao
 import com.share_manager.data.db.MeroShareDatabase
-import com.share_manager.network.ApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
-    // ── OkHttp ────────────────────────────────────────────────────────────────
 
     @Provides
     @Singleton
@@ -31,20 +28,25 @@ object AppModule {
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            // Mimic a real browser — the CDSC backend checks the Origin/Referer headers.
+            // Allow OkHttp to follow HTTP→HTTPS redirects
+            .followRedirects(true)
+            .followSslRedirects(true)
+            // Interceptor: force every request to HTTPS so we never
+            // start on HTTP and trigger a redirect chain
             .addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .addHeader("Accept", "application/json, text/plain, */*")
-                    .addHeader("Accept-Language", "en-US,en;q=0.9")
-                    .addHeader("Origin", "https://meroshare.cdsc.com.np")
-                    .addHeader("Referer", "https://meroshare.cdsc.com.np/")
-                    .addHeader(
-                        "User-Agent",
-                        "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                    )
-                    .build()
-                chain.proceed(request)
+                val original: Request = chain.request()
+                val url = original.url.toString()
+
+                // If the URL is accidentally HTTP, upgrade it to HTTPS
+                val secureRequest = if (url.startsWith("http://")) {
+                    original.newBuilder()
+                        .url(url.replace("http://", "https://"))
+                        .build()
+                } else {
+                    original
+                }
+
+                chain.proceed(secureRequest)
             }
 
         if (BuildConfig.DEBUG) {
@@ -55,24 +57,6 @@ object AppModule {
 
         return builder.build()
     }
-
-    // ── Retrofit — backend.cdsc.com.np ────────────────────────────────────────
-
-    @Provides
-    @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit =
-        Retrofit.Builder()
-            .baseUrl("https://backend.cdsc.com.np/api/meroShare/")
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-    @Provides
-    @Singleton
-    fun provideApiService(retrofit: Retrofit): ApiService =
-        retrofit.create(ApiService::class.java)
-
-    // ── Room ──────────────────────────────────────────────────────────────────
 
     @Provides
     @Singleton

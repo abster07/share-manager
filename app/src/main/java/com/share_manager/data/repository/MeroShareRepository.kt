@@ -10,6 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -29,6 +32,25 @@ class MeroShareRepository @Inject constructor(
     private val captchaValue      = "28157"
     private val captchaIdentifier = "b12025e7-12bc-4c87-8919-54b68c03f780"
 
+    // ── In-memory cookie jar ──────────────────────────────────────────────────
+    // CDSC server sets session cookies on first request. Without persisting
+    // them, each call looks like a new session and the server redirects
+    // repeatedly → "Too many follow-up requests" error.
+    private val cookieStore = mutableMapOf<String, List<Cookie>>()
+    private val cookieJar = object : CookieJar {
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            cookieStore[url.host] = cookies
+        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            return cookieStore[url.host] ?: emptyList()
+        }
+    }
+
+    // Local client that layers cookie support on top of the injected client
+    private val httpClient: OkHttpClient = okHttpClient.newBuilder()
+        .cookieJar(cookieJar)
+        .build()
+
     // ── Accounts ──────────────────────────────────────────────────────────────
 
     val accounts: Flow<List<Account>> = dao.getAllAccounts().map { list ->
@@ -47,10 +69,10 @@ class MeroShareRepository @Inject constructor(
 
     suspend fun deleteAccount(account: Account) = dao.deleteAccount(account)
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── JSON parsing helper ───────────────────────────────────────────────────
 
     /**
-     * Safely parses a raw response string to JsonObject.
+     * Safely parses a raw response string to [JsonObject].
      * Throws [IllegalStateException] with a readable message if the server
      * returns a primitive, array, or anything other than a JSON object —
      * which is the root cause of the "Expected JsonObject but was
@@ -84,10 +106,12 @@ class MeroShareRepository @Inject constructor(
             val request = Request.Builder()
                 .url("https://iporesult.cdsc.com.np/result/companyShares/fileUploaded")
                 .addHeader("Accept", "application/json, text/plain, */*")
+                .addHeader("Origin", "https://iporesult.cdsc.com.np")
+                .addHeader("Referer", "https://iporesult.cdsc.com.np/")
                 .get()
                 .build()
 
-            val responseStr = okHttpClient.newCall(request).execute()
+            val responseStr = httpClient.newCall(request).execute()
                 .use { it.body?.string().orEmpty() }
 
             val json = parseJsonObject(responseStr)
@@ -138,10 +162,12 @@ class MeroShareRepository @Inject constructor(
                     .url("https://iporesult.cdsc.com.np/result/result/check")
                     .addHeader("Accept", "application/json, text/plain, */*")
                     .addHeader("Authorization", "null")
+                    .addHeader("Origin", "https://iporesult.cdsc.com.np")
+                    .addHeader("Referer", "https://iporesult.cdsc.com.np/")
                     .post(body)
                     .build()
 
-                val responseStr = okHttpClient.newCall(request).execute()
+                val responseStr = httpClient.newCall(request).execute()
                     .use { it.body?.string().orEmpty() }
 
                 val json = parseJsonObject(responseStr)
